@@ -3,7 +3,12 @@
  * Runs on svp-international.pacc.sa to auto-detect dakbox.net emails,
  * open DakBox inbox, and auto-fill OTP verification codes
  *
- * Extracted from SVPInternationalAutomation in manpowerAI3.0
+ * EXACT COPY of dakbox.net related functions from manpowerAI3.0/modules/domains/svp-international.js
+ * Functions copied: checkForOtpVerificationPage, checkForRegistrationOtpPage,
+ *   setupOtpVerificationObserver, setupRegistrationOtpObserver,
+ *   openDakboxTab, handleOtpAutoFill, handleRegistrationOtpAutoFill,
+ *   fetchOtpFromDakBox (via background), fetchRegistrationOtp (via background),
+ *   fillVerificationCode, clickSignInButton
  */
 
 (function () {
@@ -14,85 +19,124 @@
     window.__dakbox_svp_loaded = true;
 
     // ─────────────────────────────────────────────
-    // Configuration
+    // Logging (matches original ENABLE_LOGGING pattern)
     // ─────────────────────────────────────────────
 
-    const LOG_PREFIX = '[DakBox-SVP]';
+    const ENABLE_LOGGING = true;
+    function log(...args) { if (ENABLE_LOGGING) console.log(...args); }
+    function warn(...args) { if (ENABLE_LOGGING) console.warn(...args); }
+    function error(...args) { if (ENABLE_LOGGING) console.error(...args); }
+
+    // ─────────────────────────────────────────────
+    // Settings
+    // ─────────────────────────────────────────────
+
     let autoOtpEnabled = true;
     let autoOpenInbox = true;
 
-    // Load settings
     chrome.storage.local.get(['dakboxAutoOtpEnabled', 'dakboxAutoOpenInbox'], (data) => {
-        autoOtpEnabled = data.dakboxAutoOtpEnabled !== false; // default true
-        autoOpenInbox = data.dakboxAutoOpenInbox !== false; // default true
-        console.log(`${LOG_PREFIX} Settings loaded - Auto OTP: ${autoOtpEnabled}, Auto Open: ${autoOpenInbox}`);
+        autoOtpEnabled = data.dakboxAutoOtpEnabled !== false;
+        autoOpenInbox = data.dakboxAutoOpenInbox !== false;
+        log(`[DakBox-SVP] Settings loaded - Auto OTP: ${autoOtpEnabled}, Auto Open: ${autoOpenInbox}`);
+    });
+
+    // Listen for real-time settings changes from the popup
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+        if (areaName !== 'local') return;
+        if (changes.dakboxAutoOtpEnabled) {
+            autoOtpEnabled = changes.dakboxAutoOtpEnabled.newValue !== false;
+            log(`[DakBox-SVP] Auto OTP setting changed to: ${autoOtpEnabled}`);
+        }
+        if (changes.dakboxAutoOpenInbox) {
+            autoOpenInbox = changes.dakboxAutoOpenInbox.newValue !== false;
+            log(`[DakBox-SVP] Auto Open Inbox setting changed to: ${autoOpenInbox}`);
+        }
     });
 
     // ─────────────────────────────────────────────
-    // OTP Verification Page Detection
-    // Extracted from checkForOtpVerificationPage
+    // Helper: isElementVisible (from original)
+    // ─────────────────────────────────────────────
+
+    function isElementVisible(element) {
+        if (!element) return false;
+        return element.offsetParent !== null;
+    }
+
+    // ─────────────────────────────────────────────
+    // checkForOtpVerificationPage
+    // EXACT COPY from SVPInternationalAutomation.checkForOtpVerificationPage
     // ─────────────────────────────────────────────
 
     function checkForOtpVerificationPage() {
-        const pageText = document.body?.innerText || '';
+        // Don't re-check if already handling
+        if (window.__svp_otp_handling_in_progress || window.__svp_otp_filled) {
+            return;
+        }
 
-        // Check for "Welcome back" login verification page
-        const isWelcomePage = pageText.includes('Welcome back');
-        const hasVerificationText = pageText.includes('verification') ||
-            pageText.includes('Verification') ||
-            pageText.includes('verify');
+        // Look for "Welcome back" heading
+        const welcomeBackHeading = document.querySelector('h1, h2, h3, h4, h5, h6');
+        const isWelcomePage = welcomeBackHeading &&
+            welcomeBackHeading.textContent.toLowerCase().includes('welcome back');
 
-        // Check for verification code inputs (6 individual inputs)
-        const verificationInputs = document.querySelectorAll('input[maxlength="1"]');
+        // Look for verification code text
+        const pageText = document.body.textContent || '';
+        const hasVerificationText = pageText.includes('verification code') ||
+            pageText.includes('Verification Code');
+
+        // Look for verification code input boxes (typically 6 individual inputs)
+        const verificationInputs = document.querySelectorAll('input[maxlength="1"], input.otp-input, input.verification-input');
         const hasVerificationInputs = verificationInputs.length >= 4;
 
-        // Look for dakbox.net email in specific elements
+        // Look for dakbox.net email in specific elements (more reliable than full page text)
         let dakboxEmail = null;
 
-        // Method 1: Check all text elements for dakbox.net email pattern
-        const allElements = document.querySelectorAll('span, p, div, td, label, h1, h2, h3, h4, h5, h6');
-        for (const el of allElements) {
-            const text = (el.textContent || '').trim();
+        // Try to find email in strong/bold elements, spans with email, or specific containers
+        const emailContainers = document.querySelectorAll('strong, b, span, p, div');
+        for (const container of emailContainers) {
+            const text = container.textContent || '';
+            // Only check if the element contains exactly an email (not part of a longer sentence)
             const emailRegex = /^([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)$/i;
-            const match = text.match(emailRegex);
+            const match = text.trim().match(emailRegex);
             if (match) {
                 dakboxEmail = match[1];
-                console.log(`${LOG_PREFIX} Found dakbox.net email in element: ${dakboxEmail}`);
+                log(`[SVP-OTP] Found dakbox.net email in element: ${dakboxEmail}`);
                 break;
             }
         }
 
-        // Method 2: Search in full page text
+        // Fallback: search with more restrictive pattern in page text
         if (!dakboxEmail) {
+            // Match email that follows "to " or starts a line
             const emailMatch = pageText.match(/(?:to\s+)([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
             if (emailMatch) {
                 dakboxEmail = emailMatch[1];
-                console.log(`${LOG_PREFIX} Found dakbox.net email via page text: ${dakboxEmail}`);
+                log(`[SVP-OTP] Found dakbox.net email via page text: ${dakboxEmail}`);
             }
         }
 
-        // Method 3: Check for standalone dakbox email pattern
+        // Additional fallback: find any dakbox.net email anywhere on the page
         if (!dakboxEmail) {
-            const standaloneMatch = pageText.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
-            if (standaloneMatch) {
-                dakboxEmail = standaloneMatch[1];
-                console.log(`${LOG_PREFIX} Found dakbox.net email (standalone): ${dakboxEmail}`);
+            const globalMatch = pageText.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
+            if (globalMatch) {
+                dakboxEmail = globalMatch[1];
+                log(`[SVP-OTP] Found dakbox.net email via global search: ${dakboxEmail}`);
             }
         }
 
         if ((isWelcomePage || hasVerificationText) && (hasVerificationInputs || dakboxEmail)) {
-            console.log(`${LOG_PREFIX} OTP verification page detected!`);
+            log("[SVP-OTP] OTP verification page detected!");
 
+            // Handle dakbox.net email - open Dakbox tab AND auto OTP fill
             if (dakboxEmail) {
-                console.log(`${LOG_PREFIX} DakBox email found on page: ${dakboxEmail}`);
+                log(`[SVP-OTP] DakBox email found on page: ${dakboxEmail}`);
 
-                // Open DakBox inbox in new tab if not already opened
-                if (autoOpenInbox && !window.__dakbox_inbox_opened) {
-                    console.log(`${LOG_PREFIX} Opening DakBox inbox for: ${dakboxEmail}`);
+                // Open Dakbox inbox in new tab if not already opened
+                if (autoOpenInbox && !window.__svp_dakbox_opened) {
+                    log(`[SVP-Dakbox] Opening Dakbox inbox for: ${dakboxEmail}`);
                     openDakboxTab(dakboxEmail);
                 }
 
-                // Auto-fill OTP if enabled
+                // Also auto-fill OTP
                 if (autoOtpEnabled) {
                     handleOtpAutoFill(dakboxEmail);
                 }
@@ -101,378 +145,623 @@
     }
 
     // ─────────────────────────────────────────────
-    // Registration OTP Page Detection
-    // Extracted from checkForRegistrationOtpPage
+    // checkForRegistrationOtpPage
+    // EXACT COPY from SVPInternationalAutomation.checkForRegistrationOtpPage
     // ─────────────────────────────────────────────
 
     function checkForRegistrationOtpPage() {
-        const pageText = document.body?.innerText || '';
+        if (window.__svp_reg_otp_handling_in_progress || window.__svp_reg_otp_filled) {
+            return;
+        }
 
-        // Check for registration verification indicators
-        const hasAccountVerification = pageText.includes('Account Verification') ||
-            pageText.includes('Email verification') ||
-            pageText.includes('Verify your email');
+        // Check for "Email verification" or "Account Verification" text
+        const pageText = document.body.textContent || '';
+        const isEmailVerification = pageText.includes('Email verification') ||
+            pageText.includes('Verification Code') ||
+            pageText.includes('verification code');
 
-        if (!hasAccountVerification) return;
+        // Check for Step 4 indicator (Account Verification step)
+        const isStep4 = pageText.includes('Account Verification') ||
+            (pageText.includes('Create your account') && pageText.includes('Verification Code'));
+
+        if (!isEmailVerification && !isStep4) {
+            return;
+        }
+
+        // Look for verification code input boxes
+        const verificationInputs = document.querySelectorAll('input[maxlength="1"]');
+        if (verificationInputs.length < 4) {
+            return;
+        }
+
+        log("[SVP-RegOTP] Registration Step 4 (Account Verification) detected!");
 
         // Find dakbox.net email on the page
         let dakboxEmail = null;
-        const allElements = document.querySelectorAll('span, p, div, td, label');
-        for (const el of allElements) {
-            const text = (el.textContent || '').trim();
+        const emailContainers = document.querySelectorAll('strong, b, span, p, div');
+        for (const container of emailContainers) {
+            const text = container.textContent || '';
             const emailRegex = /^([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)$/i;
-            const match = text.match(emailRegex);
+            const match = text.trim().match(emailRegex);
             if (match) {
                 dakboxEmail = match[1];
-                console.log(`${LOG_PREFIX} Found dakbox.net email on registration page: ${dakboxEmail}`);
+                log(`[SVP-RegOTP] Found dakbox.net email: ${dakboxEmail}`);
                 break;
             }
         }
 
+        // Fallback: search in page text
         if (!dakboxEmail) {
             const emailMatch = pageText.match(/(?:to\s+)([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
             if (emailMatch) {
                 dakboxEmail = emailMatch[1];
+                log(`[SVP-RegOTP] Found dakbox.net email via text: ${dakboxEmail}`);
+            }
+        }
+
+        // Additional fallback: find any dakbox.net email anywhere on the page
+        if (!dakboxEmail) {
+            const globalMatch = pageText.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
+            if (globalMatch) {
+                dakboxEmail = globalMatch[1];
+                log(`[SVP-RegOTP] Found dakbox.net email via global search: ${dakboxEmail}`);
             }
         }
 
         if (dakboxEmail) {
-            console.log(`${LOG_PREFIX} Registration OTP page with DakBox email detected!`);
+            log(`[SVP-RegOTP] DakBox email found: ${dakboxEmail}`);
 
-            // Open inbox
-            if (autoOpenInbox && !window.__dakbox_inbox_opened) {
+            // Open Dakbox inbox in new tab if not already opened
+            if (autoOpenInbox && !window.__svp_dakbox_opened) {
+                log(`[SVP-Dakbox] Opening Dakbox inbox for registration: ${dakboxEmail}`);
                 openDakboxTab(dakboxEmail);
             }
 
-            // Auto-fill registration OTP
+            // Also auto-fill OTP
             if (autoOtpEnabled) {
                 handleRegistrationOtpAutoFill(dakboxEmail);
             }
+        } else {
+            log("[SVP-RegOTP] No dakbox.net email found on registration verification page");
         }
     }
 
     // ─────────────────────────────────────────────
-    // Open DakBox Tab
-    // Extracted from SVPInternationalAutomation.openDakboxTab
+    // openDakboxTab
+    // EXACT COPY from SVPInternationalAutomation.openDakboxTab
     // ─────────────────────────────────────────────
 
     function openDakboxTab(email) {
         try {
+            // Extract username from dakbox.net email
             const match = email.match(/^([^@]+)@dakbox\.net$/i);
             if (!match) {
-                console.error(`${LOG_PREFIX} Invalid dakbox.net email format:`, email);
+                error("[SVP-Dakbox] Invalid dakbox.net email format:", email);
                 return;
             }
 
             const username = match[1];
             const dakboxUrl = `https://dakbox.net/go/${username}`;
 
-            console.log(`${LOG_PREFIX} Opening DakBox for: ${username}`);
-            window.__dakbox_inbox_opened = true;
+            log(`[SVP-Dakbox] Opening Dakbox for: ${username}`);
+            log(`[SVP-Dakbox] URL: ${dakboxUrl}`);
+
+            // Mark as opened to prevent duplicate tabs
+            window.__svp_dakbox_opened = true;
+
+            // Open in new tab
             window.open(dakboxUrl, '_blank');
-            console.log(`${LOG_PREFIX} DakBox tab opened successfully`);
-        } catch (error) {
-            console.error(`${LOG_PREFIX} Error opening DakBox tab:`, error);
+
+            log("[SVP-Dakbox] Dakbox tab opened successfully");
+        } catch (err) {
+            error("[SVP-Dakbox] Error opening Dakbox tab:", err);
         }
     }
 
     // ─────────────────────────────────────────────
-    // Handle Login OTP Auto-Fill
-    // Extracted from SVPInternationalAutomation.handleOtpAutoFill
+    // handleOtpAutoFill
+    // EXACT COPY from SVPInternationalAutomation.handleOtpAutoFill
     // ─────────────────────────────────────────────
 
     async function handleOtpAutoFill(email) {
-        console.log(`${LOG_PREFIX} Starting auto OTP fill for: ${email}`);
+        log(`[SVP-OTP] Starting auto OTP fill for: ${email}`);
 
-        if (window.__dakbox_otp_handling) {
-            console.log(`${LOG_PREFIX} OTP handling already in progress`);
+        // Prevent duplicate handling
+        if (window.__svp_otp_handling_in_progress) {
+            log("[SVP-OTP] OTP handling already in progress, skipping");
             return;
         }
-        window.__dakbox_otp_handling = true;
+        window.__svp_otp_handling_in_progress = true;
 
         try {
+            // Extract username from email (part before @dakbox.net)
             const emailMatch = email.match(/^([^@]+)@dakbox\.net$/i);
             if (!emailMatch) {
                 throw new Error(`Invalid dakbox.net email format: ${email}`);
             }
             const username = emailMatch[1];
-            console.log(`${LOG_PREFIX} Extracted username: ${username}`);
+            log(`[SVP-OTP] Extracted username: ${username}`);
 
-            // Wait for OTP email to arrive
-            console.log(`${LOG_PREFIX} Waiting 3 seconds for OTP email...`);
+            // Wait a moment for OTP email to arrive
+            log("[SVP-OTP] Waiting 3 seconds for OTP email to arrive...");
             await new Promise(resolve => setTimeout(resolve, 3000));
 
-            // Fetch OTP via background service worker
-            const otpResult = await new Promise((resolve) => {
-                chrome.runtime.sendMessage(
-                    { action: 'fetchOtp', username },
-                    resolve
-                );
-            });
+            // Fetch OTP from DakBox API (via background service worker)
+            const otpResult = await fetchOtpFromDakBox(username);
 
-            if (!otpResult || !otpResult.success) {
-                throw new Error(otpResult?.error || 'Failed to fetch OTP');
+            if (!otpResult.success) {
+                throw new Error(otpResult.error || "Failed to fetch OTP");
             }
 
-            console.log(`${LOG_PREFIX} OTP fetched successfully: ${otpResult.otp}`);
+            log(`[SVP-OTP] OTP fetched successfully: ${otpResult.otp}`);
 
             // Fill the verification code inputs
             const fillSuccess = await fillVerificationCode(otpResult.otp);
+
             if (!fillSuccess) {
-                throw new Error('Failed to fill verification code inputs');
+                throw new Error("Failed to fill verification code inputs");
             }
 
-            console.log(`${LOG_PREFIX} Verification code filled successfully`);
+            log("[SVP-OTP] Verification code filled successfully");
 
-            // Wait then click Sign in button
+            // Wait a moment then click Sign in button
             await new Promise(resolve => setTimeout(resolve, 500));
             await clickSignInButton();
 
-            window.__dakbox_otp_filled = true;
-            console.log(`${LOG_PREFIX} Auto OTP process completed!`);
+            window.__svp_otp_filled = true;
+            log("[SVP-OTP] Auto OTP process completed successfully");
 
-        } catch (error) {
-            console.error(`${LOG_PREFIX} Auto OTP fill failed:`, error);
+        } catch (err) {
+            error("[SVP-OTP] Auto OTP fill failed:", err);
         } finally {
-            window.__dakbox_otp_handling = false;
+            window.__svp_otp_handling_in_progress = false;
         }
     }
 
     // ─────────────────────────────────────────────
-    // Handle Registration OTP Auto-Fill
-    // Extracted from SVPInternationalAutomation.handleRegistrationOtpAutoFill
+    // handleRegistrationOtpAutoFill
+    // EXACT COPY from SVPInternationalAutomation.handleRegistrationOtpAutoFill
     // ─────────────────────────────────────────────
 
     async function handleRegistrationOtpAutoFill(email) {
-        console.log(`${LOG_PREFIX} Starting registration OTP fill for: ${email}`);
+        log(`[SVP-RegOTP] Starting auto OTP fill for registration: ${email}`);
 
-        if (window.__dakbox_reg_otp_handling) {
-            console.log(`${LOG_PREFIX} Registration OTP handling already in progress`);
+        if (window.__svp_reg_otp_handling_in_progress) {
+            log("[SVP-RegOTP] Already handling, skipping");
             return;
         }
-        window.__dakbox_reg_otp_handling = true;
+        window.__svp_reg_otp_handling_in_progress = true;
 
         try {
+            // Extract username from email
             const emailMatch = email.match(/^([^@]+)@dakbox\.net$/i);
             if (!emailMatch) {
                 throw new Error(`Invalid dakbox.net email format: ${email}`);
             }
             const username = emailMatch[1];
+            log(`[SVP-RegOTP] Extracted username: ${username}`);
 
             // Wait for OTP email to arrive
-            console.log(`${LOG_PREFIX} Waiting 3 seconds for registration OTP email...`);
+            log("[SVP-RegOTP] Waiting 3 seconds for OTP email to arrive...");
             await new Promise(resolve => setTimeout(resolve, 3000));
 
-            // Fetch registration OTP
-            const otpResult = await new Promise((resolve) => {
-                chrome.runtime.sendMessage(
-                    { action: 'fetchRegistrationOtp', username },
-                    resolve
-                );
-            });
+            // Fetch OTP from verification API (different endpoint for registration)
+            const otpResult = await fetchRegistrationOtp(username);
 
-            if (!otpResult || !otpResult.success) {
-                throw new Error(otpResult?.error || 'Failed to fetch registration OTP');
+            if (!otpResult.success) {
+                throw new Error(otpResult.error || "Failed to fetch OTP");
             }
 
-            console.log(`${LOG_PREFIX} Registration OTP fetched: ${otpResult.otp}`);
+            log(`[SVP-RegOTP] OTP fetched successfully: ${otpResult.otp}`);
 
+            // Fill the verification code inputs (reuse existing method)
             const fillSuccess = await fillVerificationCode(otpResult.otp);
+
             if (!fillSuccess) {
-                throw new Error('Failed to fill verification code inputs');
+                throw new Error("Failed to fill verification code inputs");
             }
 
-            console.log(`${LOG_PREFIX} Registration OTP filled (Continue NOT clicked - user handles reCAPTCHA)`);
-            window.__dakbox_reg_otp_filled = true;
+            log("[SVP-RegOTP] Verification code filled successfully");
+            log("[SVP-RegOTP] NOT clicking Continue - user will handle reCAPTCHA and Continue");
 
-        } catch (error) {
-            console.error(`${LOG_PREFIX} Registration OTP fill failed:`, error);
+            window.__svp_reg_otp_filled = true;
+            log("[SVP-RegOTP] Auto OTP process completed successfully (Continue NOT clicked)");
+
+        } catch (err) {
+            error("[SVP-RegOTP] Auto OTP fill failed:", err);
         } finally {
-            window.__dakbox_reg_otp_handling = false;
+            window.__svp_reg_otp_handling_in_progress = false;
         }
     }
 
     // ─────────────────────────────────────────────
-    // Fill Verification Code
-    // Extracted from SVPInternationalAutomation.fillVerificationCode
+    // fetchOtpFromDakBox (via background service worker)
+    // Original calls API directly, here we route through background.js
+    // because content scripts on svp-international.pacc.sa can't
+    // directly CORS-fetch from t2hub.app
+    // ─────────────────────────────────────────────
+
+    async function fetchOtpFromDakBox(username, maxRetries = 5) {
+        return new Promise((resolve) => {
+            chrome.runtime.sendMessage(
+                { action: 'fetchOtp', username, maxRetries },
+                (response) => {
+                    if (chrome.runtime.lastError) {
+                        resolve({ success: false, error: chrome.runtime.lastError.message });
+                    } else {
+                        resolve(response || { success: false, error: 'No response from background' });
+                    }
+                }
+            );
+        });
+    }
+
+    // ─────────────────────────────────────────────
+    // fetchRegistrationOtp (via background service worker)
+    // ─────────────────────────────────────────────
+
+    async function fetchRegistrationOtp(username, maxRetries = 5) {
+        return new Promise((resolve) => {
+            chrome.runtime.sendMessage(
+                { action: 'fetchRegistrationOtp', username, maxRetries },
+                (response) => {
+                    if (chrome.runtime.lastError) {
+                        resolve({ success: false, error: chrome.runtime.lastError.message });
+                    } else {
+                        resolve(response || { success: false, error: 'No response from background' });
+                    }
+                }
+            );
+        });
+    }
+
+    // ─────────────────────────────────────────────
+    // fillVerificationCode
+    // EXACT COPY from SVPInternationalAutomation.fillVerificationCode
     // ─────────────────────────────────────────────
 
     async function fillVerificationCode(otp) {
-        console.log(`${LOG_PREFIX} Filling verification code: ${otp}`);
+        log(`[SVP-OTP] Filling verification code: ${otp}`);
 
-        const digits = otp.toString().split('');
+        try {
+            // Convert OTP to string and get individual digits
+            const digits = String(otp).split('');
+            log(`[SVP-OTP] OTP digits: ${digits.join(', ')} (${digits.length} digits)`);
 
-        // Strategy 1: Individual single-character inputs
-        let inputs = document.querySelectorAll('input[maxlength="1"]');
+            // Find verification code input boxes
+            // Common patterns: individual inputs with maxlength="1", or inputs in a specific container
+            const inputSelectors = [
+                // Individual inputs with maxlength 1
+                'input[maxlength="1"]',
+                // OTP specific inputs
+                '.otp-input input',
+                '.verification-code input',
+                '.code-input input',
+                // Element UI style inputs
+                '.el-input input[maxlength="1"]',
+                // Generic number inputs in verification container
+                '[class*="verification"] input',
+                '[class*="otp"] input',
+                '[class*="code"] input[type="text"]',
+                '[class*="code"] input[type="number"]'
+            ];
 
-        if (inputs.length === 0) {
-            // Strategy 2: Look in shadow DOM or nested containers
-            const containers = document.querySelectorAll('[class*="verification"], [class*="otp"], [class*="code"]');
-            for (const container of containers) {
-                inputs = container.querySelectorAll('input');
-                if (inputs.length >= 4) break;
+            let inputs = [];
+
+            // Try each selector until we find verification inputs
+            for (const selector of inputSelectors) {
+                const found = Array.from(document.querySelectorAll(selector));
+                if (found.length >= digits.length) {
+                    inputs = found.slice(0, digits.length);
+                    log(`[SVP-OTP] Found ${found.length} inputs with selector: ${selector}`);
+                    break;
+                }
             }
-        }
 
-        if (inputs.length === 0) {
-            // Strategy 3: Look for a single input that takes full OTP
-            const singleInput = document.querySelector('input[type="text"][maxlength="6"], input[type="number"][maxlength="6"]');
-            if (singleInput) {
-                setNativeValue(singleInput, otp);
-                triggerInputEvents(singleInput);
-                console.log(`${LOG_PREFIX} Filled single OTP input`);
-                return true;
+            // If still no inputs found, try to find by layout (6 adjacent inputs)
+            if (inputs.length < digits.length) {
+                const allInputs = Array.from(document.querySelectorAll('input[type="text"], input[type="tel"], input[type="number"], input:not([type])'));
+                const potentialOtpInputs = allInputs.filter(input => {
+                    const maxLength = input.getAttribute('maxlength');
+                    const isSmall = input.offsetWidth < 80;
+                    return (maxLength === '1' || isSmall) && isElementVisible(input);
+                });
+
+                if (potentialOtpInputs.length >= digits.length) {
+                    inputs = potentialOtpInputs.slice(0, digits.length);
+                    log(`[SVP-OTP] Found ${potentialOtpInputs.length} potential OTP inputs via layout analysis`);
+                }
             }
-        }
 
-        if (inputs.length >= digits.length) {
+            if (inputs.length < digits.length) {
+                error(`[SVP-OTP] Not enough verification inputs found. Need ${digits.length}, found ${inputs.length}`);
+                return false;
+            }
+
+            // Fill each input with corresponding digit
             for (let i = 0; i < digits.length; i++) {
                 const input = inputs[i];
-                setNativeValue(input, digits[i]);
-                triggerInputEvents(input);
+                const digit = digits[i];
 
-                // Small delay between digit fills to mimic typing
+                log(`[SVP-OTP] Filling input ${i + 1} with digit: ${digit}`);
+
+                // Focus the input
+                input.focus();
                 await new Promise(resolve => setTimeout(resolve, 50));
-            }
-            console.log(`${LOG_PREFIX} Filled ${digits.length} verification code inputs`);
-            return true;
-        }
 
-        // Fallback: try filling all available inputs
-        if (inputs.length > 0) {
-            for (let i = 0; i < Math.min(inputs.length, digits.length); i++) {
-                setNativeValue(inputs[i], digits[i]);
-                triggerInputEvents(inputs[i]);
-                await new Promise(resolve => setTimeout(resolve, 50));
-            }
-            return true;
-        }
+                // Clear existing value
+                const setter = Object.getOwnPropertyDescriptor(
+                    window.HTMLInputElement.prototype,
+                    "value"
+                ).set;
 
-        console.error(`${LOG_PREFIX} Could not find verification code inputs`);
-        return false;
+                setter.call(input, '');
+                input.dispatchEvent(new InputEvent('input', {
+                    bubbles: true,
+                    inputType: 'deleteContentBackward'
+                }));
+
+                // Set new value
+                setter.call(input, digit);
+
+                // Dispatch comprehensive events
+                input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: digit }));
+                input.dispatchEvent(new InputEvent('input', {
+                    bubbles: true,
+                    inputType: 'insertText',
+                    data: digit
+                }));
+                input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: digit }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+
+                // Small delay between inputs to mimic typing
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            // Blur the last input
+            if (inputs.length > 0) {
+                inputs[inputs.length - 1].blur();
+            }
+
+            log("[SVP-OTP] All verification code digits filled successfully");
+            return true;
+
+        } catch (err) {
+            error("[SVP-OTP] Error filling verification code:", err);
+            return false;
+        }
     }
 
     // ─────────────────────────────────────────────
-    // Click Sign In Button
-    // Extracted from SVPInternationalAutomation.clickSignInButton
+    // clickSignInButton
+    // EXACT COPY from SVPInternationalAutomation.clickSignInButton
     // ─────────────────────────────────────────────
 
     async function clickSignInButton() {
-        console.log(`${LOG_PREFIX} Looking for Sign In button...`);
+        log("[SVP-OTP] Attempting to click Sign in button...");
 
-        const selectors = [
-            'button[type="submit"]',
-            'button:contains("Sign in")',
-            'button:contains("Verify")',
-            'button:contains("Submit")',
-            'button:contains("Continue")',
-            'input[type="submit"]'
-        ];
+        try {
+            const signInSelectors = [
+                // Common sign in button selectors
+                'button[type="submit"]',
+                'button:contains("Sign in")',
+                'button:contains("sign in")',
+                '.sign-in-btn',
+                '.signin-btn',
+                '[data-test-id="signInButton"]',
+                '[data-test-id*="signIn"]',
+                '[data-test-id*="signin"]',
+                '.el-button--primary'
+            ];
 
-        // Try standard selectors first
-        for (const selector of selectors) {
-            try {
-                const btn = document.querySelector(selector);
-                if (btn && btn.offsetParent !== null) {
-                    console.log(`${LOG_PREFIX} Found button with selector: ${selector}`);
-                    btn.click();
-                    return true;
-                }
-            } catch (e) {
-                // :contains is not standard CSS, handle below
-            }
-        }
+            let signInButton = null;
 
-        // Try text-based search
-        const buttons = document.querySelectorAll('button, input[type="submit"], a.btn');
-        for (const btn of buttons) {
-            const text = (btn.textContent || btn.value || '').trim().toLowerCase();
-            if (['sign in', 'verify', 'submit', 'continue', 'confirm'].some(t => text.includes(t))) {
-                if (btn.offsetParent !== null) {
-                    console.log(`${LOG_PREFIX} Found button by text: "${text}"`);
-                    btn.click();
-                    return true;
+            // Try specific selectors first
+            for (const selector of signInSelectors) {
+                try {
+                    const button = document.querySelector(selector);
+                    if (button && isElementVisible(button) && !button.disabled) {
+                        signInButton = button;
+                        log(`[SVP-OTP] Found Sign in button with selector: ${selector}`);
+                        break;
+                    }
+                } catch (e) {
+                    // :contains selector might not be supported, continue to next
                 }
             }
+
+            // If not found, try text-based search
+            if (!signInButton) {
+                log("[SVP-OTP] Trying text-based search for Sign in button...");
+                const buttons = Array.from(document.querySelectorAll('button, .el-button, [role="button"]'));
+                signInButton = buttons.find(btn => {
+                    const text = (btn.textContent || btn.innerText || '').toLowerCase().trim();
+                    return (text === 'sign in' || text === 'signin' || text.includes('sign in')) &&
+                        isElementVisible(btn) && !btn.disabled;
+                });
+
+                if (signInButton) {
+                    log("[SVP-OTP] Found Sign in button via text search");
+                }
+            }
+
+            if (!signInButton) {
+                warn("[SVP-OTP] Sign in button not found");
+                return false;
+            }
+
+            // Click the button
+            signInButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            signInButton.click();
+            signInButton.dispatchEvent(new Event('click', { bubbles: true }));
+
+            log("[SVP-OTP] Sign in button clicked successfully");
+            return true;
+
+        } catch (err) {
+            error("[SVP-OTP] Error clicking Sign in button:", err);
+            return false;
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // setupOtpVerificationObserver
+    // EXACT COPY from SVPInternationalAutomation.setupOtpVerificationObserver
+    // ─────────────────────────────────────────────
+
+    function setupOtpVerificationObserver() {
+        log("[SVP-OTP] Setting up OTP verification page observer...");
+
+        // Reset flags for SPA navigation - allow re-checking on each navigation
+        window.__svp_otp_filled = false;
+        window.__svp_otp_handling_in_progress = false;
+
+        // Clear any existing OTP observer interval
+        if (window.__svp_otp_check_interval) {
+            clearInterval(window.__svp_otp_check_interval);
+            window.__svp_otp_check_interval = null;
         }
 
-        console.warn(`${LOG_PREFIX} Sign In button not found`);
-        return false;
-    }
-
-    // ─────────────────────────────────────────────
-    // DOM Utility Functions
-    // ─────────────────────────────────────────────
-
-    function setNativeValue(element, value) {
-        const valueSetter = Object.getOwnPropertyDescriptor(
-            window.HTMLInputElement.prototype, 'value'
-        ).set;
-        valueSetter.call(element, value);
-    }
-
-    function triggerInputEvents(element) {
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-        element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }));
-        element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-    }
-
-    // ─────────────────────────────────────────────
-    // Page Observer - Watch for OTP Page Transitions
-    // ─────────────────────────────────────────────
-
-    function setupPageObserver() {
-        // Initial check
+        // Check immediately for verification page
         setTimeout(() => {
             checkForOtpVerificationPage();
-            checkForRegistrationOtpPage();
-        }, 2000);
+        }, 1000);
 
-        // Watch for page changes (SPA navigation)
-        const observer = new MutationObserver(() => {
-            // Debounce checks
-            if (window.__dakbox_check_timer) {
-                clearTimeout(window.__dakbox_check_timer);
+        // Set up periodic checking for SPA navigation (more reliable than MutationObserver alone)
+        window.__svp_otp_check_interval = setInterval(() => {
+            // Only check if not already filled and on login page
+            if (!window.__svp_otp_filled &&
+                !window.__svp_otp_handling_in_progress &&
+                window.location.href.indexOf("/auth/login") !== -1) {
+                checkForOtpVerificationPage();
             }
-            window.__dakbox_check_timer = setTimeout(() => {
-                if (!window.__dakbox_otp_filled && !window.__dakbox_otp_handling) {
-                    checkForOtpVerificationPage();
+        }, 2000); // Check every 2 seconds
+
+        // Also set up MutationObserver for faster detection
+        if (!window.__svp_otp_mutation_observer) {
+            let otpCheckTimeout = null;
+            const otpObserver = new MutationObserver((mutations) => {
+                // Only check if not already handling OTP and on login page
+                if (!window.__svp_otp_handling_in_progress &&
+                    !window.__svp_otp_filled &&
+                    window.location.href.indexOf("/auth/login") !== -1) {
+                    // Debounce the check
+                    if (otpCheckTimeout) {
+                        clearTimeout(otpCheckTimeout);
+                    }
+                    otpCheckTimeout = setTimeout(() => {
+                        checkForOtpVerificationPage();
+                    }, 500);
                 }
-                if (!window.__dakbox_reg_otp_filled && !window.__dakbox_reg_otp_handling) {
-                    checkForRegistrationOtpPage();
-                }
-            }, 1000);
-        });
+            });
 
-        observer.observe(document.body, { childList: true, subtree: true });
+            otpObserver.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
 
-        // Also watch URL changes
-        let lastUrl = location.href;
-        const urlObserver = new MutationObserver(() => {
-            if (location.href !== lastUrl) {
-                lastUrl = location.href;
-                // Reset states on URL change
-                window.__dakbox_otp_filled = false;
-                window.__dakbox_otp_handling = false;
-                window.__dakbox_reg_otp_filled = false;
-                window.__dakbox_reg_otp_handling = false;
-                window.__dakbox_inbox_opened = false;
+            window.__svp_otp_mutation_observer = otpObserver;
+        }
 
-                setTimeout(() => {
-                    checkForOtpVerificationPage();
-                    checkForRegistrationOtpPage();
-                }, 2000);
-            }
-        });
-        urlObserver.observe(document, { subtree: true, childList: true });
+        log("[SVP-OTP] OTP verification observer initialized (SPA-aware)");
     }
 
     // ─────────────────────────────────────────────
-    // Initialize
+    // setupRegistrationOtpObserver
+    // EXACT COPY from SVPInternationalAutomation.setupRegistrationOtpObserver
     // ─────────────────────────────────────────────
 
-    console.log(`${LOG_PREFIX} SVP OTP content script loaded`);
-    setupPageObserver();
+    function setupRegistrationOtpObserver() {
+        log("[SVP-RegOTP] Setting up Registration OTP verification observer...");
+
+        // Reset flags for fresh detection
+        window.__svp_reg_otp_filled = false;
+        window.__svp_reg_otp_handling_in_progress = false;
+
+        // Clear any existing interval
+        if (window.__svp_reg_otp_check_interval) {
+            clearInterval(window.__svp_reg_otp_check_interval);
+            window.__svp_reg_otp_check_interval = null;
+        }
+
+        // Check immediately
+        setTimeout(() => {
+            checkForRegistrationOtpPage();
+        }, 1000);
+
+        // Set up periodic checking
+        window.__svp_reg_otp_check_interval = setInterval(() => {
+            if (!window.__svp_reg_otp_filled &&
+                !window.__svp_reg_otp_handling_in_progress &&
+                window.location.href.indexOf("/auth/register") !== -1) {
+                checkForRegistrationOtpPage();
+            }
+        }, 2000);
+
+        // Also set up MutationObserver for faster detection
+        if (!window.__svp_reg_otp_mutation_observer) {
+            let regOtpCheckTimeout = null;
+            const regOtpObserver = new MutationObserver((mutations) => {
+                if (!window.__svp_reg_otp_handling_in_progress &&
+                    !window.__svp_reg_otp_filled &&
+                    window.location.href.indexOf("/auth/register") !== -1) {
+                    if (regOtpCheckTimeout) {
+                        clearTimeout(regOtpCheckTimeout);
+                    }
+                    regOtpCheckTimeout = setTimeout(() => {
+                        checkForRegistrationOtpPage();
+                    }, 500);
+                }
+            });
+
+            regOtpObserver.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+
+            window.__svp_reg_otp_mutation_observer = regOtpObserver;
+        }
+
+        log("[SVP-RegOTP] Registration OTP observer initialized");
+    }
+
+    // ─────────────────────────────────────────────
+    // Initialize - same as original initializeAutomation
+    // Sets up both observers when script loads
+    // ─────────────────────────────────────────────
+
+    log(`[DakBox-SVP] SVP OTP content script loaded on: ${location.href}`);
+
+    // Reset dakbox opened flag
+    window.__svp_dakbox_opened = false;
+
+    // Initialize both observers (same as original)
+    if (document.body) {
+        setupOtpVerificationObserver();
+        setupRegistrationOtpObserver();
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            setupOtpVerificationObserver();
+            setupRegistrationOtpObserver();
+        });
+    }
+
+    // Watch for URL changes (SPA navigation) and re-initialize observers
+    let lastUrl = location.href;
+    setInterval(() => {
+        if (location.href !== lastUrl) {
+            log(`[DakBox-SVP] URL changed: ${lastUrl} → ${location.href}`);
+            lastUrl = location.href;
+
+            // Reset dakbox opened flag on navigation
+            window.__svp_dakbox_opened = false;
+
+            // Re-initialize observers for the new page
+            setupOtpVerificationObserver();
+            setupRegistrationOtpObserver();
+        }
+    }, 500);
 
 })();

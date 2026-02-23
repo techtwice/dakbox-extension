@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DakBox Helper</title>
   <link rel="stylesheet" href="popup.css">
 </head>
+
 <body>
   <div class="popup-container">
     <!-- Header -->
@@ -14,7 +16,7 @@
         <img src="../assets/icon-48.png" alt="DakBox" class="logo-icon">
         <div class="logo-text">
           <h1>DakBox</h1>
-          <span class="version-badge" id="version-badge">v1.0.0</span>
+          <span style="float: right;" class="version-badge" id="version-badge">v1.0.0</span>
         </div>
       </div>
       <div class="header-subtitle">Temporary Email & OTP Helper</div>
@@ -27,12 +29,7 @@
         Quick Open Inbox
       </div>
       <div class="input-group">
-        <input 
-          type="text" 
-          id="username-input" 
-          class="input-field" 
-          placeholder="Enter username (e.g., john)"
-        >
+        <input type="text" id="username-input" class="input-field" placeholder="Enter username (e.g., john)">
         <button class="btn btn-primary" id="open-inbox-btn" title="Open inbox">
           <span class="btn-icon">🔗</span>
         </button>
@@ -92,4 +89,5 @@
 
   <script src="popup.js"></script>
 </body>
+
 </html>
