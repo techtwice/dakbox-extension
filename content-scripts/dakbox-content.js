@@ -5,57 +5,63 @@
  */
 
 (function () {
-    'use strict';
+  'use strict';
 
-    // Prevent duplicate injection
-    if (window.__dakbox_extension_loaded) return;
-    window.__dakbox_extension_loaded = true;
+  // Prevent duplicate injection
+  if (window.__dakbox_extension_loaded) return;
+  window.__dakbox_extension_loaded = true;
 
-    console.log('[DakBox Extension] Content script loaded on dakbox.net');
+  // Don't show on admin pages
+  if (window.location.pathname.startsWith('/admin')) {
+    console.log('[DakBox Extension] Skipping on admin page');
+    return;
+  }
 
-    // ─────────────────────────────────────────────
-    // OTP Extraction Utilities
-    // ─────────────────────────────────────────────
+  console.log('[DakBox Extension] Content script loaded on dakbox.net');
 
-    /**
-     * Extract OTP code from email content text
-     * Supports 4-6 digit numeric codes commonly used in verification
-     */
-    function extractOtpFromText(text) {
-        if (!text) return null;
+  // ─────────────────────────────────────────────
+  // OTP Extraction Utilities
+  // ─────────────────────────────────────────────
 
-        // Common OTP patterns:
-        // "Your verification code is: 123456"
-        // "OTP: 1234"
-        // "Code: 567890"
-        // "verification code 123456"
-        const patterns = [
-            /(?:verification\s*code|otp|code|pin)\s*(?:is)?[:\s]+(\d{4,6})/i,
-            /(\d{4,6})\s*(?:is\s+your|verification|otp|code)/i,
-            /\b(\d{6})\b/,  // Fallback: any 6-digit number
-            /\b(\d{4})\b/   // Fallback: any 4-digit number
-        ];
+  /**
+   * Extract OTP code from email content text
+   * Supports 4-6 digit numeric codes commonly used in verification
+   */
+  function extractOtpFromText(text) {
+    if (!text) return null;
 
-        for (const pattern of patterns) {
-            const match = text.match(pattern);
-            if (match) return match[1];
-        }
+    // Common OTP patterns:
+    // "Your verification code is: 123456"
+    // "OTP: 1234"
+    // "Code: 567890"
+    // "verification code 123456"
+    const patterns = [
+      /(?:verification\s*code|otp|code|pin)\s*(?:is)?[:\s]+(\d{4,6})/i,
+      /(\d{4,6})\s*(?:is\s+your|verification|otp|code)/i,
+      /\b(\d{6})\b/,  // Fallback: any 6-digit number
+      /\b(\d{4})\b/   // Fallback: any 4-digit number
+    ];
 
-        return null;
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) return match[1];
     }
 
-    // ─────────────────────────────────────────────
-    // Floating OTP Panel
-    // ─────────────────────────────────────────────
+    return null;
+  }
 
-    function createOtpPanel() {
-        // Remove existing panel if any
-        const existing = document.getElementById('dakbox-ext-panel');
-        if (existing) existing.remove();
+  // ─────────────────────────────────────────────
+  // Floating OTP Panel
+  // ─────────────────────────────────────────────
 
-        const panel = document.createElement('div');
-        panel.id = 'dakbox-ext-panel';
-        panel.innerHTML = `
+  function createOtpPanel() {
+    // Remove existing panel if any
+    const existing = document.getElementById('dakbox-ext-panel');
+    if (existing) existing.remove();
+
+    const panel = document.createElement('div');
+    panel.id = 'dakbox-ext-panel';
+    panel.innerHTML = `
       <style>
         #dakbox-ext-panel {
           position: fixed;
@@ -262,195 +268,195 @@
       </div>
     `;
 
-        document.body.appendChild(panel);
-        setupPanelEvents(panel);
-        detectCurrentEmail();
-    }
+    document.body.appendChild(panel);
+    setupPanelEvents(panel);
+    detectCurrentEmail();
+  }
 
-    // ─────────────────────────────────────────────
-    // Panel Event Handlers
-    // ─────────────────────────────────────────────
+  // ─────────────────────────────────────────────
+  // Panel Event Handlers
+  // ─────────────────────────────────────────────
 
-    function setupPanelEvents(panel) {
-        // Minimize/expand
-        const closeBtn = panel.querySelector('#dakbox-ext-close');
-        closeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            panel.classList.toggle('minimized');
+  function setupPanelEvents(panel) {
+    // Minimize/expand
+    const closeBtn = panel.querySelector('#dakbox-ext-close');
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.classList.toggle('minimized');
+    });
+
+    panel.addEventListener('click', () => {
+      if (panel.classList.contains('minimized')) {
+        panel.classList.remove('minimized');
+      }
+    });
+
+    // Copy email
+    const copyBtn = panel.querySelector('#dakbox-ext-copy-email');
+    copyBtn.addEventListener('click', () => {
+      const emailEl = panel.querySelector('#dakbox-ext-email');
+      const email = emailEl.textContent;
+      if (email && email !== 'Detecting email...') {
+        navigator.clipboard.writeText(email).then(() => {
+          copyBtn.textContent = '✓ Copied';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
+        });
+      }
+    });
+
+    // Fetch OTP
+    const fetchBtn = panel.querySelector('#dakbox-ext-fetch-otp');
+    fetchBtn.addEventListener('click', async () => {
+      const emailEl = panel.querySelector('#dakbox-ext-email');
+      const email = emailEl.textContent;
+
+      if (!email || email === 'Detecting email...') {
+        setStatus('No email detected', 'error');
+        return;
+      }
+
+      const username = email.replace(/@dakbox\.net$/i, '');
+      fetchBtn.disabled = true;
+      fetchBtn.textContent = '⏳ Fetching...';
+      setStatus('Connecting to OTP API...');
+
+      try {
+        const result = await new Promise((resolve) => {
+          chrome.runtime.sendMessage(
+            { action: 'fetchOtp', username },
+            resolve
+          );
         });
 
-        panel.addEventListener('click', () => {
-            if (panel.classList.contains('minimized')) {
-                panel.classList.remove('minimized');
-            }
-        });
+        if (result && result.success && result.otp) {
+          displayOtp(result.otp);
+          setStatus(`OTP fetched! Expires in ${result.remaining_seconds || '?'}s`, 'success');
 
-        // Copy email
-        const copyBtn = panel.querySelector('#dakbox-ext-copy-email');
-        copyBtn.addEventListener('click', () => {
-            const emailEl = panel.querySelector('#dakbox-ext-email');
-            const email = emailEl.textContent;
-            if (email && email !== 'Detecting email...') {
-                navigator.clipboard.writeText(email).then(() => {
-                    copyBtn.textContent = '✓ Copied';
-                    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000);
-                });
-            }
-        });
-
-        // Fetch OTP
-        const fetchBtn = panel.querySelector('#dakbox-ext-fetch-otp');
-        fetchBtn.addEventListener('click', async () => {
-            const emailEl = panel.querySelector('#dakbox-ext-email');
-            const email = emailEl.textContent;
-
-            if (!email || email === 'Detecting email...') {
-                setStatus('No email detected', 'error');
-                return;
-            }
-
-            const username = email.replace(/@dakbox\.net$/i, '');
-            fetchBtn.disabled = true;
-            fetchBtn.textContent = '⏳ Fetching...';
-            setStatus('Connecting to OTP API...');
-
-            try {
-                const result = await new Promise((resolve) => {
-                    chrome.runtime.sendMessage(
-                        { action: 'fetchOtp', username },
-                        resolve
-                    );
-                });
-
-                if (result && result.success && result.otp) {
-                    displayOtp(result.otp);
-                    setStatus(`OTP fetched! Expires in ${result.remaining_seconds || '?'}s`, 'success');
-
-                    // Save username for popup quick access
-                    chrome.storage.local.set({ dakboxLastUsername: username });
-                } else {
-                    setStatus(result?.error || 'Failed to fetch OTP', 'error');
-                }
-            } catch (error) {
-                setStatus('Error: ' + error.message, 'error');
-            }
-
-            fetchBtn.disabled = false;
-            fetchBtn.textContent = '🔑 Fetch OTP from API';
-        });
-    }
-
-    // ─────────────────────────────────────────────
-    // Helper Functions
-    // ─────────────────────────────────────────────
-
-    function displayOtp(otp) {
-        const display = document.getElementById('dakbox-ext-otp-display');
-        if (!display) return;
-
-        display.className = 'ext-otp-code';
-        display.textContent = otp;
-        display.style.cursor = 'pointer';
-        display.title = 'Click to copy';
-        display.onclick = () => {
-            navigator.clipboard.writeText(otp).then(() => {
-                setStatus('OTP copied to clipboard!', 'success');
-            });
-        };
-    }
-
-    function setStatus(message, type = '') {
-        const status = document.getElementById('dakbox-ext-status');
-        if (status) {
-            status.textContent = message;
-            status.className = 'ext-status' + (type ? ' ' + type : '');
-        }
-    }
-
-    function detectCurrentEmail() {
-        const emailEl = document.getElementById('dakbox-ext-email');
-        if (!emailEl) return;
-
-        // Try to detect the email from the dakbox.net page
-        // Method 1: Check URL pattern /go/{username}
-        const urlMatch = window.location.pathname.match(/\/go\/([^/?#]+)/);
-        if (urlMatch) {
-            const username = urlMatch[1];
-            emailEl.textContent = `${username}@dakbox.net`;
-            return;
-        }
-
-        // Method 2: Scan page for email display elements
-        const allElements = document.querySelectorAll('input, span, div, p, h1, h2, h3, h4, h5, td');
-        for (const el of allElements) {
-            const text = (el.value || el.textContent || '').trim();
-            const emailMatch = text.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
-            if (emailMatch) {
-                emailEl.textContent = emailMatch[1];
-                return;
-            }
-        }
-
-        // Method 3: Use a MutationObserver to detect email appearing later
-        emailEl.textContent = 'Scanning for email...';
-        const observer = new MutationObserver(() => {
-            const elements = document.querySelectorAll('input, span, div, p, td');
-            for (const el of elements) {
-                const text = (el.value || el.textContent || '').trim();
-                const match = text.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
-                if (match) {
-                    emailEl.textContent = match[1];
-                    observer.disconnect();
-                    return;
-                }
-            }
-        });
-        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-        setTimeout(() => observer.disconnect(), 30000);
-    }
-
-    // ─────────────────────────────────────────────
-    // Auto-detect OTP in Incoming Emails
-    // ─────────────────────────────────────────────
-
-    function setupEmailObserver() {
-        const observer = new MutationObserver(() => {
-            // Look for email content that might contain OTP codes
-            const emailBodies = document.querySelectorAll('.email-body, .message-body, .email-content, [class*="email"], [class*="message"]');
-
-            for (const body of emailBodies) {
-                const text = body.textContent;
-                const otp = extractOtpFromText(text);
-                if (otp) {
-                    displayOtp(otp);
-                    setStatus('OTP auto-detected from email!', 'success');
-
-                    // Auto-copy to clipboard
-                    navigator.clipboard.writeText(otp).catch(() => { });
-                }
-            }
-        });
-
-        observer.observe(document.body, { childList: true, subtree: true });
-    }
-
-    // ─────────────────────────────────────────────
-    // Initialize
-    // ─────────────────────────────────────────────
-
-    function init() {
-        // Wait for page to be ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                createOtpPanel();
-                setupEmailObserver();
-            });
+          // Save username for popup quick access
+          chrome.storage.local.set({ dakboxLastUsername: username });
         } else {
-            createOtpPanel();
-            setupEmailObserver();
+          setStatus(result?.error || 'Failed to fetch OTP', 'error');
         }
+      } catch (error) {
+        setStatus('Error: ' + error.message, 'error');
+      }
+
+      fetchBtn.disabled = false;
+      fetchBtn.textContent = '🔑 Fetch OTP from API';
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  // Helper Functions
+  // ─────────────────────────────────────────────
+
+  function displayOtp(otp) {
+    const display = document.getElementById('dakbox-ext-otp-display');
+    if (!display) return;
+
+    display.className = 'ext-otp-code';
+    display.textContent = otp;
+    display.style.cursor = 'pointer';
+    display.title = 'Click to copy';
+    display.onclick = () => {
+      navigator.clipboard.writeText(otp).then(() => {
+        setStatus('OTP copied to clipboard!', 'success');
+      });
+    };
+  }
+
+  function setStatus(message, type = '') {
+    const status = document.getElementById('dakbox-ext-status');
+    if (status) {
+      status.textContent = message;
+      status.className = 'ext-status' + (type ? ' ' + type : '');
+    }
+  }
+
+  function detectCurrentEmail() {
+    const emailEl = document.getElementById('dakbox-ext-email');
+    if (!emailEl) return;
+
+    // Try to detect the email from the dakbox.net page
+    // Method 1: Check URL pattern /go/{username}
+    const urlMatch = window.location.pathname.match(/\/go\/([^/?#]+)/);
+    if (urlMatch) {
+      const username = urlMatch[1];
+      emailEl.textContent = `${username}@dakbox.net`;
+      return;
     }
 
-    init();
+    // Method 2: Scan page for email display elements
+    const allElements = document.querySelectorAll('input, span, div, p, h1, h2, h3, h4, h5, td');
+    for (const el of allElements) {
+      const text = (el.value || el.textContent || '').trim();
+      const emailMatch = text.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
+      if (emailMatch) {
+        emailEl.textContent = emailMatch[1];
+        return;
+      }
+    }
+
+    // Method 3: Use a MutationObserver to detect email appearing later
+    emailEl.textContent = 'Scanning for email...';
+    const observer = new MutationObserver(() => {
+      const elements = document.querySelectorAll('input, span, div, p, td');
+      for (const el of elements) {
+        const text = (el.value || el.textContent || '').trim();
+        const match = text.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
+        if (match) {
+          emailEl.textContent = match[1];
+          observer.disconnect();
+          return;
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    setTimeout(() => observer.disconnect(), 30000);
+  }
+
+  // ─────────────────────────────────────────────
+  // Auto-detect OTP in Incoming Emails
+  // ─────────────────────────────────────────────
+
+  function setupEmailObserver() {
+    const observer = new MutationObserver(() => {
+      // Look for email content that might contain OTP codes
+      const emailBodies = document.querySelectorAll('.email-body, .message-body, .email-content, [class*="email"], [class*="message"]');
+
+      for (const body of emailBodies) {
+        const text = body.textContent;
+        const otp = extractOtpFromText(text);
+        if (otp) {
+          displayOtp(otp);
+          setStatus('OTP auto-detected from email!', 'success');
+
+          // Auto-copy to clipboard
+          navigator.clipboard.writeText(otp).catch(() => { });
+        }
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+  }
+
+  // ─────────────────────────────────────────────
+  // Initialize
+  // ─────────────────────────────────────────────
+
+  function init() {
+    // Wait for page to be ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        createOtpPanel();
+        setupEmailObserver();
+      });
+    } else {
+      createOtpPanel();
+      setupEmailObserver();
+    }
+  }
+
+  init();
 
 })();

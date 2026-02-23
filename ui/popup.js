@@ -116,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         fetchLoginOtpBtn.disabled = false;
         fetchRegOtpBtn.disabled = false;
-        fetchLoginOtpBtn.innerHTML = '<span class="btn-icon">🔓</span> Login OTP';
+        fetchLoginOtpBtn.innerHTML = '<span class="btn-icon">🔓</span> Get OTP';
     });
 
     // ─────────────────────────────────────────────
