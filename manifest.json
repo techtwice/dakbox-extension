@@ -1,0 +1,59 @@
+{
+  "manifest_version": 3,
+  "name": "DakBox - Temporary Email & OTP Helper",
+  "version": "1.0.0",
+  "description": "Enhance your DakBox.net temporary email experience with auto OTP extraction, quick inbox access, and seamless verification code auto-fill.",
+  "action": {
+    "default_popup": "ui/popup.html",
+    "default_icon": "assets/icon-128.png"
+  },
+  "icons": {
+    "16": "assets/icon-16.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  },
+  "background": {
+    "service_worker": "core/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://dakbox.net/*"
+      ],
+      "js": [
+        "content-scripts/dakbox-content.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://svp-international.pacc.sa/*"
+      ],
+      "js": [
+        "content-scripts/svp-otp-content.js"
+      ],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "modules/otp-api.js"
+      ],
+      "matches": [
+        "https://dakbox.net/*",
+        "https://svp-international.pacc.sa/*"
+      ]
+    }
+  ],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://dakbox.net/*",
+    "https://t2hub.app/*",
+    "https://svp-international.pacc.sa/*"
+  ]
+}
