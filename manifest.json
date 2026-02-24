@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "DakBox - Temporary Email & OTP Helper",
   "version": "1.0.0",
-  "description": "Enhance your DakBox.net temporary email experience with auto OTP extraction, quick inbox access, and seamless verification code auto-fill.",
+  "description": "Enhance your DakBox.net temporary email with auto OTP extraction, quick inbox access, and verification code auto-fill.",
   "action": {
     "default_popup": "ui/popup.html",
     "default_icon": "assets/icon-128.png"
