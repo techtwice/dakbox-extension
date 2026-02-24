@@ -1,6 +1,7 @@
 /**
  * DakBox Extension - Background Service Worker
  * Handles messaging between content scripts, OTP API calls, and tab management
+ * Uses dakbox.net/api with Bearer token authentication
  */
 
 // Listen for messages from popup and content scripts
@@ -41,7 +42,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             chrome.storage.local.get([
                 'dakboxAutoOtpEnabled',
                 'dakboxAutoOpenInbox',
-                'dakboxLastUsername'
+                'dakboxLastUsername',
+                'dakboxApiToken'
             ], (data) => {
                 sendResponse(data);
             });
@@ -67,22 +69,39 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 /**
+ * Get API token from storage
+ */
+async function getApiToken() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get(['dakboxApiToken'], (data) => {
+            resolve(data.dakboxApiToken || null);
+        });
+    });
+}
+
+/**
  * Fetch OTP from DakBox API (for login verification)
- * Extracted from SVPInternationalAutomation.fetchOtpFromDakBox
+ * Uses dakbox.net/api/otp/get with Bearer token
  */
 async function fetchOtpFromDakBox(username, maxRetries = 5) {
-    const apiUrl = `https://t2hub.app/api/otp/get?email=${encodeURIComponent(username)}`;
+    const token = await getApiToken();
+    if (!token) {
+        return { success: false, error: 'API token not set. Please connect in extension settings.' };
+    }
+
+    const apiUrl = `https://dakbox.net/api/otp/get?email=${encodeURIComponent(username)}`;
     console.log(`[DakBox] Fetching OTP from: ${apiUrl}`);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
 
             const response = await fetch(apiUrl, {
                 method: 'GET',
                 signal: controller.signal,
                 headers: {
+                    'Authorization': `Bearer ${token}`,
                     'Accept': 'application/json',
                     'Cache-Control': 'no-cache'
                 }
@@ -90,7 +109,7 @@ async function fetchOtpFromDakBox(username, maxRetries = 5) {
 
             clearTimeout(timeoutId);
 
-            // Try to parse JSON body even on non-200 responses (410 = expired OTP still has data)
+            // Try to parse JSON body even on non-200 responses
             let data;
             try {
                 data = await response.json();
@@ -100,6 +119,11 @@ async function fetchOtpFromDakBox(username, maxRetries = 5) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 throw new Error('Failed to parse API response');
+            }
+
+            // Handle 401 Unauthorized
+            if (response.status === 401) {
+                return { success: false, error: 'API token invalid or expired. Please reconnect.' };
             }
 
             // Handle 410 Gone - OTP expired but might still have the code
@@ -184,21 +208,27 @@ async function fetchOtpFromDakBox(username, maxRetries = 5) {
 
 /**
  * Fetch OTP from verification API (for registration verification)
- * Extracted from SVPInternationalAutomation.fetchRegistrationOtp
+ * Uses dakbox.net/api/otp/verification with Bearer token
  */
 async function fetchRegistrationOtp(username, maxRetries = 5) {
-    const apiUrl = `https://t2hub.app/api/otp/verification?email=${encodeURIComponent(username)}`;
+    const token = await getApiToken();
+    if (!token) {
+        return { success: false, error: 'API token not set. Please connect in extension settings.' };
+    }
+
+    const apiUrl = `https://dakbox.net/api/otp/verification?email=${encodeURIComponent(username)}`;
     console.log(`[DakBox] Fetching registration OTP from: ${apiUrl}`);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000);
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
 
             const response = await fetch(apiUrl, {
                 method: 'GET',
                 signal: controller.signal,
                 headers: {
+                    'Authorization': `Bearer ${token}`,
                     'Accept': 'application/json',
                     'Cache-Control': 'no-cache'
                 }
@@ -206,7 +236,7 @@ async function fetchRegistrationOtp(username, maxRetries = 5) {
 
             clearTimeout(timeoutId);
 
-            // Try to parse JSON body even on non-200 responses (410 = expired OTP still has data)
+            // Try to parse JSON body even on non-200 responses
             let data;
             try {
                 data = await response.json();
@@ -218,11 +248,15 @@ async function fetchRegistrationOtp(username, maxRetries = 5) {
                 throw new Error('Failed to parse API response');
             }
 
+            // Handle 401 Unauthorized
+            if (response.status === 401) {
+                return { success: false, error: 'API token invalid or expired. Please reconnect.' };
+            }
+
             // Handle 410 Gone - OTP expired but might still have the code
             if (response.status === 410) {
                 console.warn('[DakBox] Registration OTP expired (410 Gone)');
                 if (data && data.data && data.data.otp) {
-                    console.log('[DakBox] Expired registration OTP still available:', data.data.otp);
                     return {
                         success: true,
                         otp: data.data.otp,
@@ -299,7 +333,8 @@ chrome.runtime.onInstalled.addListener((details) => {
         chrome.storage.local.set({
             dakboxAutoOtpEnabled: true,
             dakboxAutoOpenInbox: true,
-            dakboxLastUsername: ''
+            dakboxLastUsername: '',
+            dakboxApiToken: ''
         });
     }
 });

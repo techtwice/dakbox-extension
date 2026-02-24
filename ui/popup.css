@@ -377,3 +377,103 @@ body {
 .loading {
   animation: pulse 1.5s infinite;
 }
+
+/* ── API Setup View ── */
+.api-description {
+  font-size: 12px;
+  color: #8b949e;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+/* ── Plan Info Section ── */
+.plan-section {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.plan-info {
+  flex: 1;
+}
+
+.plan-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+}
+
+.plan-row + .plan-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.plan-label {
+  font-size: 11px;
+  color: #8b949e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.plan-value {
+  font-size: 12px;
+  color: #c9d1d9;
+  font-weight: 500;
+}
+
+.plan-email {
+  font-size: 11px;
+  color: #58a6ff;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-badge {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.plan-free {
+  background: rgba(139, 148, 158, 0.15);
+  color: #8b949e;
+}
+
+.plan-premium, .plan-pro {
+  background: rgba(78, 204, 163, 0.15);
+  color: #4ecca3;
+}
+
+.plan-enterprise {
+  background: rgba(88, 166, 255, 0.15);
+  color: #58a6ff;
+}
+
+.btn-disconnect {
+  cursor: pointer;
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.2);
+  color: #e94560;
+  font-size: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.btn-disconnect:hover {
+  background: rgba(233, 69, 96, 0.25);
+  border-color: rgba(233, 69, 96, 0.4);
+}
+

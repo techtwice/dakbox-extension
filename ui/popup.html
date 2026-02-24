@@ -22,60 +22,109 @@
       <div class="header-subtitle">Temporary Email & OTP Helper</div>
     </div>
 
-    <!-- Quick Open Inbox -->
-    <div class="section">
-      <div class="section-label">
-        <span class="section-icon">📬</span>
-        Quick Open Inbox
+    <!-- ══════════════════════════════════════════ -->
+    <!-- API Setup View (shown when no token set) -->
+    <!-- ══════════════════════════════════════════ -->
+    <div id="api-setup-view">
+      <div class="section">
+        <div class="section-label">
+          <span class="section-icon">🔐</span>
+          API Connection
+        </div>
+        <p class="api-description">Enter your DakBox API Token to connect.</p>
+        <div class="input-group">
+          <input type="password" id="api-token-input" class="input-field" placeholder="API Key (e.g., 1|abc...)">
+          <button class="btn btn-primary" id="connect-api-btn" title="Connect">
+            <span class="btn-icon">🔗</span>
+          </button>
+        </div>
+        <div class="status-text" id="api-status-text"></div>
       </div>
-      <div class="input-group">
-        <input type="text" id="username-input" class="input-field" placeholder="Enter username (e.g., john)">
-        <button class="btn btn-primary" id="open-inbox-btn" title="Open inbox">
-          <span class="btn-icon">🔗</span>
-        </button>
-      </div>
-      <div class="input-hint">Opens dakbox.net/go/<span id="username-preview">username</span></div>
     </div>
 
-    <!-- OTP Fetch -->
-    <div class="section">
-      <div class="section-label">
-        <span class="section-icon">🔑</span>
-        Fetch OTP Code
-      </div>
-      <div class="btn-group">
-        <button class="btn btn-accent" id="fetch-login-otp-btn">
-          <span class="btn-icon">🔓</span> Get OTP
-        </button>
-        <button class="btn btn-accent-alt" id="fetch-reg-otp-btn" style="display:none;">
-          <span class="btn-icon">📝</span> Registration OTP
-        </button>
-      </div>
-      <div class="otp-display" id="otp-display">
-        <div class="otp-placeholder">Enter username above and click to fetch</div>
-      </div>
-      <div class="status-text" id="status-text"></div>
-    </div>
+    <!-- ══════════════════════════════════════════ -->
+    <!-- Connected View (shown after API connected) -->
+    <!-- ══════════════════════════════════════════ -->
+    <div id="connected-view" style="display:none;">
 
-    <!-- Settings -->
-    <div class="section section-settings">
-      <div class="section-label">
-        <span class="section-icon">⚙️</span>
-        Settings
+      <!-- Plan Info -->
+      <div class="section plan-section">
+        <div class="plan-info">
+          <div class="plan-row">
+            <span class="plan-label">Plan</span>
+            <span class="plan-value" id="plan-type">—</span>
+          </div>
+          <div class="plan-row">
+            <span class="plan-label">Expires</span>
+            <span class="plan-value" id="plan-expires">—</span>
+          </div>
+          <div class="plan-row">
+            <span class="plan-label">User</span>
+            <span class="plan-value plan-email" id="plan-email">—</span>
+          </div>
+          <div class="plan-row">
+            <span class="plan-label">OTP Usage</span>
+            <span class="plan-value" id="plan-otp-usage">—</span>
+          </div>
+        </div>
+        <button class="btn-disconnect" id="disconnect-btn" title="Disconnect API">✕</button>
       </div>
-      <div class="setting-row">
-        <span class="setting-label">Auto OTP Fill on SVP</span>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-auto-otp" checked>
-          <span class="toggle-slider"></span>
-        </label>
+
+      <!-- Quick Open Inbox -->
+      <div class="section">
+        <div class="section-label">
+          <span class="section-icon">📬</span>
+          Quick Open Inbox
+        </div>
+        <div class="input-group">
+          <input type="text" id="username-input" class="input-field" placeholder="Enter username (e.g., john)">
+          <button class="btn btn-primary" id="open-inbox-btn" title="Open inbox">
+            <span class="btn-icon">🔗</span>
+          </button>
+        </div>
+        <div class="input-hint">Opens dakbox.net/go/<span id="username-preview">username</span></div>
       </div>
-      <div class="setting-row">
-        <span class="setting-label">Auto Open Inbox</span>
-        <label class="toggle">
-          <input type="checkbox" id="toggle-auto-open" checked>
-          <span class="toggle-slider"></span>
-        </label>
+
+      <!-- OTP Fetch -->
+      <div class="section">
+        <div class="section-label">
+          <span class="section-icon">🔑</span>
+          Fetch OTP Code
+        </div>
+        <div class="btn-group">
+          <button class="btn btn-accent" id="fetch-login-otp-btn">
+            <span class="btn-icon">🔓</span> Get OTP
+          </button>
+          <button class="btn btn-accent-alt" id="fetch-reg-otp-btn" style="display:none;">
+            <span class="btn-icon">📝</span> Registration OTP
+          </button>
+        </div>
+        <div class="otp-display" id="otp-display">
+          <div class="otp-placeholder">Enter username above and click to fetch</div>
+        </div>
+        <div class="status-text" id="status-text"></div>
+      </div>
+
+      <!-- Settings -->
+      <div class="section section-settings">
+        <div class="section-label">
+          <span class="section-icon">⚙️</span>
+          Settings
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Auto OTP Fill on SVP</span>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-auto-otp" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Auto Open Inbox</span>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-auto-open" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
       </div>
     </div>
 
