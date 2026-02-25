@@ -33,11 +33,13 @@
 
     let autoOtpEnabled = true;
     let autoOpenInbox = true;
+    let autoOpenYopmail = true;
 
-    chrome.storage.local.get(['dakboxAutoOtpEnabled', 'dakboxAutoOpenInbox'], (data) => {
+    chrome.storage.local.get(['dakboxAutoOtpEnabled', 'dakboxAutoOpenInbox', 'dakboxAutoOpenYopmail'], (data) => {
         autoOtpEnabled = data.dakboxAutoOtpEnabled !== false;
         autoOpenInbox = data.dakboxAutoOpenInbox !== false;
-        log(`[DakBox-SVP] Settings loaded - Auto OTP: ${autoOtpEnabled}, Auto Open: ${autoOpenInbox}`);
+        autoOpenYopmail = data.dakboxAutoOpenYopmail !== false;
+        log(`[DakBox-SVP] Settings loaded - Auto OTP: ${autoOtpEnabled}, Auto Open: ${autoOpenInbox}, Auto Yopmail: ${autoOpenYopmail}`);
     });
 
     // Listen for real-time settings changes from the popup
@@ -50,6 +52,10 @@
         if (changes.dakboxAutoOpenInbox) {
             autoOpenInbox = changes.dakboxAutoOpenInbox.newValue !== false;
             log(`[DakBox-SVP] Auto Open Inbox setting changed to: ${autoOpenInbox}`);
+        }
+        if (changes.dakboxAutoOpenYopmail) {
+            autoOpenYopmail = changes.dakboxAutoOpenYopmail.newValue !== false;
+            log(`[DakBox-SVP] Auto Open Yopmail setting changed to: ${autoOpenYopmail}`);
         }
     });
 
@@ -87,46 +93,66 @@
         const verificationInputs = document.querySelectorAll('input[maxlength="1"], input.otp-input, input.verification-input');
         const hasVerificationInputs = verificationInputs.length >= 4;
 
-        // Look for dakbox.net email in specific elements (more reliable than full page text)
+        // Look for email in specific elements (more reliable than full page text)
         let dakboxEmail = null;
+        let yopmailEmail = null;
 
         // Try to find email in strong/bold elements, spans with email, or specific containers
         const emailContainers = document.querySelectorAll('strong, b, span, p, div');
         for (const container of emailContainers) {
             const text = container.textContent || '';
             // Only check if the element contains exactly an email (not part of a longer sentence)
-            const emailRegex = /^([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)$/i;
-            const match = text.trim().match(emailRegex);
-            if (match) {
-                dakboxEmail = match[1];
+            const dakboxRegex = /^([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)$/i;
+            const yopmailRegex = /^([a-zA-Z0-9][a-zA-Z0-9._%+-]*@yopmail\.com)$/i;
+
+            const matchDakbox = text.trim().match(dakboxRegex);
+            if (matchDakbox) {
+                dakboxEmail = matchDakbox[1];
                 log(`[SVP-OTP] Found dakbox.net email in element: ${dakboxEmail}`);
-                break;
             }
+
+            const matchYopmail = text.trim().match(yopmailRegex);
+            if (matchYopmail) {
+                yopmailEmail = matchYopmail[1];
+                log(`[SVP-OTP] Found yopmail.com email in element: ${yopmailEmail}`);
+            }
+
+            if (dakboxEmail || yopmailEmail) break;
         }
 
         // Fallback: search with more restrictive pattern in page text
-        if (!dakboxEmail) {
-            // Match email that follows "to " or starts a line
-            const emailMatch = pageText.match(/(?:to\s+)([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
-            if (emailMatch) {
-                dakboxEmail = emailMatch[1];
+        if (!dakboxEmail && !yopmailEmail) {
+            const dakboxMatch = pageText.match(/(?:to\s+)([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
+            if (dakboxMatch) {
+                dakboxEmail = dakboxMatch[1];
                 log(`[SVP-OTP] Found dakbox.net email via page text: ${dakboxEmail}`);
             }
-        }
 
-        // Additional fallback: find any dakbox.net email anywhere on the page
-        if (!dakboxEmail) {
-            const globalMatch = pageText.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
-            if (globalMatch) {
-                dakboxEmail = globalMatch[1];
-                log(`[SVP-OTP] Found dakbox.net email via global search: ${dakboxEmail}`);
+            const yopmailMatch = pageText.match(/(?:to\s+)([a-zA-Z0-9][a-zA-Z0-9._%+-]*@yopmail\.com)/i);
+            if (yopmailMatch) {
+                yopmailEmail = yopmailMatch[1];
+                log(`[SVP-OTP] Found yopmail.com email via page text: ${yopmailEmail}`);
             }
         }
 
-        if ((isWelcomePage || hasVerificationText) && (hasVerificationInputs || dakboxEmail)) {
+        // Additional fallback: find any email anywhere on the page
+        if (!dakboxEmail && !yopmailEmail) {
+            const globalDakboxMatch = pageText.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
+            if (globalDakboxMatch) {
+                dakboxEmail = globalDakboxMatch[1];
+                log(`[SVP-OTP] Found dakbox.net email via global search: ${dakboxEmail}`);
+            }
+
+            const globalYopmailMatch = pageText.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@yopmail\.com)/i);
+            if (globalYopmailMatch) {
+                yopmailEmail = globalYopmailMatch[1];
+                log(`[SVP-OTP] Found yopmail.com email via global search: ${yopmailEmail}`);
+            }
+        }
+
+        if ((isWelcomePage || hasVerificationText) && (hasVerificationInputs || dakboxEmail || yopmailEmail)) {
             log("[SVP-OTP] OTP verification page detected!");
 
-            // Handle dakbox.net email - open Dakbox tab AND auto OTP fill
             if (dakboxEmail) {
                 log(`[SVP-OTP] DakBox email found on page: ${dakboxEmail}`);
 
@@ -139,6 +165,13 @@
                 // Also auto-fill OTP
                 if (autoOtpEnabled) {
                     handleOtpAutoFill(dakboxEmail);
+                }
+            } else if (yopmailEmail) {
+                log(`[SVP-OTP] Yopmail email found on page: ${yopmailEmail}`);
+
+                // Open Yopmail inbox in new tab if not already opened
+                if (autoOpenYopmail && !window.__svp_yopmail_opened) {
+                    openYopmailTab(yopmailEmail);
                 }
             }
         }
@@ -176,35 +209,58 @@
 
         log("[SVP-RegOTP] Registration Step 4 (Account Verification) detected!");
 
-        // Find dakbox.net email on the page
+        // Find email on the page
         let dakboxEmail = null;
+        let yopmailEmail = null;
+
         const emailContainers = document.querySelectorAll('strong, b, span, p, div');
         for (const container of emailContainers) {
             const text = container.textContent || '';
-            const emailRegex = /^([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)$/i;
-            const match = text.trim().match(emailRegex);
-            if (match) {
-                dakboxEmail = match[1];
+            const dakboxRegex = /^([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)$/i;
+            const yopmailRegex = /^([a-zA-Z0-9][a-zA-Z0-9._%+-]*@yopmail\.com)$/i;
+
+            const matchDakbox = text.trim().match(dakboxRegex);
+            if (matchDakbox) {
+                dakboxEmail = matchDakbox[1];
                 log(`[SVP-RegOTP] Found dakbox.net email: ${dakboxEmail}`);
-                break;
             }
+
+            const matchYopmail = text.trim().match(yopmailRegex);
+            if (matchYopmail) {
+                yopmailEmail = matchYopmail[1];
+                log(`[SVP-RegOTP] Found yopmail.com email: ${yopmailEmail}`);
+            }
+
+            if (dakboxEmail || yopmailEmail) break;
         }
 
         // Fallback: search in page text
-        if (!dakboxEmail) {
-            const emailMatch = pageText.match(/(?:to\s+)([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
-            if (emailMatch) {
-                dakboxEmail = emailMatch[1];
+        if (!dakboxEmail && !yopmailEmail) {
+            const dakboxMatch = pageText.match(/(?:to\s+)([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
+            if (dakboxMatch) {
+                dakboxEmail = dakboxMatch[1];
                 log(`[SVP-RegOTP] Found dakbox.net email via text: ${dakboxEmail}`);
+            }
+
+            const yopmailMatch = pageText.match(/(?:to\s+)([a-zA-Z0-9][a-zA-Z0-9._%+-]*@yopmail\.com)/i);
+            if (yopmailMatch) {
+                yopmailEmail = yopmailMatch[1];
+                log(`[SVP-RegOTP] Found yopmail.com email via text: ${yopmailEmail}`);
             }
         }
 
-        // Additional fallback: find any dakbox.net email anywhere on the page
-        if (!dakboxEmail) {
-            const globalMatch = pageText.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
-            if (globalMatch) {
-                dakboxEmail = globalMatch[1];
+        // Additional fallback: find any email anywhere on the page
+        if (!dakboxEmail && !yopmailEmail) {
+            const globalDakboxMatch = pageText.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@dakbox\.net)/i);
+            if (globalDakboxMatch) {
+                dakboxEmail = globalDakboxMatch[1];
                 log(`[SVP-RegOTP] Found dakbox.net email via global search: ${dakboxEmail}`);
+            }
+
+            const globalYopmailMatch = pageText.match(/([a-zA-Z0-9][a-zA-Z0-9._%+-]*@yopmail\.com)/i);
+            if (globalYopmailMatch) {
+                yopmailEmail = globalYopmailMatch[1];
+                log(`[SVP-RegOTP] Found yopmail.com email via global search: ${yopmailEmail}`);
             }
         }
 
@@ -221,8 +277,15 @@
             if (autoOtpEnabled) {
                 handleRegistrationOtpAutoFill(dakboxEmail);
             }
+        } else if (yopmailEmail) {
+            log(`[SVP-RegOTP] Yopmail email found: ${yopmailEmail}`);
+
+            // Open Yopmail inbox in new tab if not already opened
+            if (autoOpenYopmail && !window.__svp_yopmail_opened) {
+                openYopmailTab(yopmailEmail);
+            }
         } else {
-            log("[SVP-RegOTP] No dakbox.net email found on registration verification page");
+            log("[SVP-RegOTP] No email found on registration verification page");
         }
     }
 
@@ -255,6 +318,40 @@
             log("[SVP-Dakbox] Dakbox tab opened successfully");
         } catch (err) {
             error("[SVP-Dakbox] Error opening Dakbox tab:", err);
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // openYopmailTab
+    // ─────────────────────────────────────────────
+
+    /**
+     * Open Yopmail inbox in a new tab
+     */
+    function openYopmailTab(email) {
+        try {
+            // Extract username from yopmail email
+            const match = email.match(/^([^@]+)@yopmail\.com$/i);
+            if (!match) {
+                error("[SVP-Yopmail] Invalid yopmail email format:", email);
+                return;
+            }
+
+            const username = match[1];
+            const yopmailUrl = `https://yopmail.com/?${username}`;
+
+            log(`[SVP-Yopmail] Opening Yopmail for: ${username}`);
+            log(`[SVP-Yopmail] URL: ${yopmailUrl}`);
+
+            // Mark as opened to prevent duplicate tabs
+            window.__svp_yopmail_opened = true;
+
+            // Open in new tab
+            window.open(yopmailUrl, '_blank');
+
+            log("[SVP-Yopmail] Yopmail tab opened successfully");
+        } catch (err) {
+            error("[SVP-Yopmail] Error opening Yopmail tab:", err);
         }
     }
 
@@ -734,8 +831,9 @@
 
     log(`[DakBox-SVP] SVP OTP content script loaded on: ${location.href}`);
 
-    // Reset dakbox opened flag
+    // Reset dakbox/yopmail opened flags
     window.__svp_dakbox_opened = false;
+    window.__svp_yopmail_opened = false;
 
     // Initialize both observers (same as original)
     if (document.body) {
@@ -755,8 +853,9 @@
             log(`[DakBox-SVP] URL changed: ${lastUrl} → ${location.href}`);
             lastUrl = location.href;
 
-            // Reset dakbox opened flag on navigation
+            // Reset dakbox/yopmail opened flags on navigation
             window.__svp_dakbox_opened = false;
+            window.__svp_yopmail_opened = false;
 
             // Re-initialize observers for the new page
             setupOtpVerificationObserver();
