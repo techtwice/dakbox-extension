@@ -2,6 +2,7 @@
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)
+[![Chrome Web Store](https://img.shields.io/chrome-web-store/v/mlfdegmnkajihcbbgcjghokjhofgepeo.svg)](https://chromewebstore.google.com/detail/dakbox-temporary-email-ot/mlfdegmnkajihcbbgcjghokjhofgepeo)
 
 Enhance your DakBox.net temporary email experience with automatic OTP (One-Time Password) extraction, quick inbox access, and seamless verification code auto-fill. This extension bridges your temporary inbox directly to your active tabs, saving you time and effort.
 
@@ -12,9 +13,17 @@ Enhance your DakBox.net temporary email experience with automatic OTP (One-Time 
 - 🤖 **Auto-Fill Functionality:** Automatically fill verification codes on supported platforms (like `svp-international.pacc.sa`).
 - 🔒 **Privacy Focused:** Operates locally in your browser to maintain your privacy while using temporary emails.
 
-## 🚀 Installation (Developer Mode)
+## 🚀 Installation
 
-To try out this extension locally before it is published to the web store:
+### From Chrome Web Store (Recommended)
+
+You can easily install the DakBox extension directly from the Chrome Web Store:
+
+* [**Download DakBox from the Chrome Web Store**](https://chromewebstore.google.com/detail/dakbox-temporary-email-ot/mlfdegmnkajihcbbgcjghokjhofgepeo)
+
+### Developer Mode (Local Installation)
+
+To try out this extension locally or contribute to its development:
 
 1. Clone or download this repository to your local machine.
 2. Open your chromium-based browser and navigate to the Extensions page (`chrome://extensions/` or `edge://extensions/`).
