@@ -1,6 +1,6 @@
 # DakBox - Temporary Email & OTP Helper
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 ![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)
 [![Chrome Web Store](https://img.shields.io/chrome-web-store/v/mlfdegmnkajihcbbgcjghokjhofgepeo.svg)](https://chromewebstore.google.com/detail/dakbox-temporary-email-ot/mlfdegmnkajihcbbgcjghokjhofgepeo)
 
