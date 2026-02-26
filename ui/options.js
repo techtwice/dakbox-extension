@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const otpEmailInput = document.getElementById('otp-email-input');
     const otpTriggerInput = document.getElementById('otp-trigger-input');
     const otpBoxInput = document.getElementById('otp-box-input');
+    const otpSubmitInput = document.getElementById('otp-submit-input');
     const otpExpiryInput = document.getElementById('otp-expiry-input');
     const otpSaveBtn = document.getElementById('otp-save-btn');
     const otpConfigTbody = document.getElementById('otp-config-tbody');
@@ -183,6 +184,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="font-size: 12px; margin-bottom: 4px;">
                         <span style="color: var(--text-muted)">OTP Box:</span> <code>${config.otpSelector}</code>
                     </div>
+                    ${config.otpSubmitSelector ? `
+                    <div style="font-size: 12px; margin-bottom: 4px;">
+                        <span style="color: var(--text-muted)">Submit:</span> <code>${config.otpSubmitSelector}</code>
+                    </div>` : ''}
                     ${config.expiry ? `<div style="font-size: 12px;"><span style="color: var(--text-muted)">Expiry:</span> ${config.expiry}s</div>` : ''}
                 `;
 
@@ -259,8 +264,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let domain = domainInput.value.trim().toLowerCase();
         const selector = selectorInput.value.trim();
 
-        if (!domain || !selector) {
-            showStatus('Please fill in both Domain and Selector!', 'error');
+        if (!validateRequired([domainInput, selectorInput])) {
+            showStatus('Please fill in all mandatory fields!', 'error');
             return;
         }
 
@@ -342,10 +347,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const emailSelector = otpEmailInput.value.trim();
         const triggerSelector = otpTriggerInput.value.trim();
         const otpSelector = otpBoxInput.value.trim();
+        const otpSubmitSelector = otpSubmitInput.value.trim();
         const expiry = parseInt(otpExpiryInput.value.trim(), 10);
 
-        if (!domain || !emailSelector || !triggerSelector || !otpSelector) {
-            showStatus('Please fill in Domain and all 3 Selectors for OTP Config!', 'error');
+        if (!validateRequired([otpDomainInput, otpEmailInput, otpTriggerInput, otpBoxInput])) {
+            showStatus('Please fill in all mandatory fields!', 'error');
             return;
         }
 
@@ -356,6 +362,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) { }
 
+        // Preserve enabled state if editing
+        const isEnabled = (editingOtpDomain && otpSiteConfig[editingOtpDomain]) ? otpSiteConfig[editingOtpDomain].enabled : true;
+
         if (editingOtpDomain && editingOtpDomain !== domain) {
             delete otpSiteConfig[editingOtpDomain];
         }
@@ -364,7 +373,9 @@ document.addEventListener('DOMContentLoaded', () => {
             emailSelector,
             triggerSelector,
             otpSelector,
-            expiry: isNaN(expiry) ? null : expiry
+            otpSubmitSelector: otpSubmitSelector || undefined,
+            expiry: isNaN(expiry) ? undefined : expiry,
+            enabled: isEnabled
         };
 
         saveConfig(() => {
@@ -374,6 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
             otpEmailInput.value = '';
             otpTriggerInput.value = '';
             otpBoxInput.value = '';
+            otpSubmitInput.value = '';
             otpExpiryInput.value = '';
             otpSaveBtn.textContent = 'Add OTP Config';
             editingOtpDomain = null;
@@ -383,11 +395,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function editOtpEntry(domain) {
-        const config = otpSiteConfig[domain];
+        let config = otpSiteConfig[domain];
+        if (typeof config === 'string') config = { emailSelector: config, triggerSelector: '', otpSelector: '', enabled: true };
+
         otpDomainInput.value = domain;
-        otpEmailInput.value = config.emailSelector;
-        otpTriggerInput.value = config.triggerSelector;
-        otpBoxInput.value = config.otpSelector;
+        otpEmailInput.value = config.emailSelector || '';
+        otpTriggerInput.value = config.triggerSelector || '';
+        otpBoxInput.value = config.otpSelector || '';
+        otpSubmitInput.value = config.otpSubmitSelector || '';
         otpExpiryInput.value = config.expiry || '';
 
         editingOtpDomain = domain;
@@ -423,6 +438,34 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     }
+
+    // Helper to highlight empty required fields
+    function validateRequired(inputs) {
+        let firstEmpty = null;
+        let isValid = true;
+
+        inputs.forEach(input => {
+            if (!input.value.trim()) {
+                input.classList.add('input-error');
+                isValid = false;
+                if (!firstEmpty) firstEmpty = input;
+            } else {
+                input.classList.remove('input-error');
+            }
+        });
+
+        if (firstEmpty) firstEmpty.focus();
+        return isValid;
+    }
+
+    // Clear error class on input
+    document.querySelectorAll('input').forEach(input => {
+        input.addEventListener('input', () => {
+            if (input.value.trim()) {
+                input.classList.remove('input-error');
+            }
+        });
+    });
 
     // Init
     loadConfig();

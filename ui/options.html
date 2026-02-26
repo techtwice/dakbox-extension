@@ -239,6 +239,18 @@
             display: block;
         }
 
+        input.input-error {
+            border-color: var(--danger-color);
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+        }
+
+        .input-error-msg {
+            color: var(--danger-color);
+            font-size: 12px;
+            margin-top: 4px;
+            display: none;
+        }
+
         .guidelines {
             background-color: rgba(59, 130, 246, 0.1);
             border-left: 4px solid var(--accent-color);
@@ -348,11 +360,11 @@
 
         <div class="add-form">
             <div class="form-group">
-                <label for="domain-input">Website Domain</label>
+                <label for="domain-input">Website Domain <span style="color: red;">*</span></label>
                 <input type="text" id="domain-input" placeholder="e.g. example.com">
             </div>
             <div class="form-group">
-                <label for="selector-input">CSS Selector</label>
+                <label for="selector-input">Email Selector <span style="color: red;">*</span></label>
                 <div class="input-with-picker">
                     <input type="text" id="selector-input" placeholder="e.g. #user_email or .login-input[type='email']">
                     <button type="button" class="pick-btn" data-target="selector-input"
@@ -412,14 +424,13 @@
                     DakBox filter older emails.</li>
             </ul>
         </div>
-
         <div class="add-form" style="flex-wrap: wrap;">
             <div class="form-group" style="min-width: 45%;">
-                <label for="otp-domain-input">Website Domain</label>
+                <label for="otp-domain-input">Website Domain <span style="color: red;">*</span></label>
                 <input type="text" id="otp-domain-input" placeholder="e.g. example.com">
             </div>
             <div class="form-group" style="min-width: 45%;">
-                <label for="otp-email-input">Email Input Selector</label>
+                <label for="otp-email-input">Email Input Selector <span style="color: red;">*</span></label>
                 <div class="input-with-picker">
                     <input type="text" id="otp-email-input" placeholder="e.g. input[type='email']">
                     <button type="button" class="pick-btn" data-target="otp-email-input"
@@ -436,7 +447,7 @@
                 </div>
             </div>
             <div class="form-group" style="min-width: 30%;">
-                <label for="otp-trigger-input">Submit Button Selector</label>
+                <label for="otp-trigger-input">Email Submit Button Selector <span style="color: red;">*</span></label>
                 <div class="input-with-picker">
                     <input type="text" id="otp-trigger-input" placeholder="e.g. button[type='submit']">
                     <button type="button" class="pick-btn" data-target="otp-trigger-input"
@@ -453,10 +464,27 @@
                 </div>
             </div>
             <div class="form-group" style="min-width: 30%;">
-                <label for="otp-box-input">OTP Box Selector</label>
+                <label for="otp-box-input">OTP Box Selector <span style="color: red;">*</span></label>
                 <div class="input-with-picker">
                     <input type="text" id="otp-box-input" placeholder="e.g. .otp-input">
                     <button type="button" class="pick-btn" data-target="otp-box-input"
+                        title="Pick an element on the current page">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="22" y1="12" x2="18" y2="12"></line>
+                            <line x1="6" y1="12" x2="2" y2="12"></line>
+                            <line x1="12" y1="6" x2="12" y2="2"></line>
+                            <line x1="12" y1="22" x2="12" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="form-group" style="min-width: 30%;">
+                <label for="otp-submit-input">OTP Submit Button Selector (Optional)</label>
+                <div class="input-with-picker">
+                    <input type="text" id="otp-submit-input" placeholder="e.g. button[type='submit']">
+                    <button type="button" class="pick-btn" data-target="otp-submit-input"
                         title="Pick an element on the current page">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

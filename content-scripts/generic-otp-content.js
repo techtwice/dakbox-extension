@@ -173,7 +173,7 @@
                 const otpInputs = document.querySelectorAll(otpConfig.otpSelector);
 
                 if (otpInputs.length > 0) {
-                    autoFillOtp(otpCode, otpInputs);
+                    autoFillOtp(otpCode, otpInputs, otpConfig);
                     stopPolling();
                 } else {
                     console.log("[DakBox] OTP found, but input fields not found. Waiting for UI...");
@@ -193,7 +193,7 @@
         chrome.storage.local.remove('dakboxOtpSession');
     }
 
-    function autoFillOtp(code, inputNodes) {
+    function autoFillOtp(code, inputNodes, config = {}) {
         const charArray = code.split('');
 
         if (inputNodes.length === 1) {
@@ -204,6 +204,23 @@
             for (let i = 0; i < inputNodes.length && i < charArray.length; i++) {
                 fillSingleInput(inputNodes[i], charArray[i]);
             }
+        }
+
+        // Try to trigger auto-submit if configured
+        if (config.otpSubmitSelector) {
+            setTimeout(() => {
+                try {
+                    const submitBtn = document.querySelector(config.otpSubmitSelector);
+                    if (submitBtn) {
+                        console.log("[DakBox] Auto-clicking OTP submit button...");
+                        submitBtn.click();
+                    } else {
+                        console.warn("[DakBox] Auto-submit button not found with selector:", config.otpSubmitSelector);
+                    }
+                } catch (e) {
+                    console.error("[DakBox] Error auto-submitting:", e);
+                }
+            }, 300); // slight delay to allow React/Vue to process the input events
         }
     }
 
