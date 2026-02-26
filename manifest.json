@@ -25,7 +25,8 @@
         "<all_urls>"
       ],
       "js": [
-        "content-scripts/email-generator.js"
+        "content-scripts/email-generator.js",
+        "content-scripts/generic-otp-content.js"
       ],
       "run_at": "document_idle"
     },

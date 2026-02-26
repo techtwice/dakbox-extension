@@ -318,7 +318,16 @@
         }
         if (changes.dakboxSiteConfig) {
             // Update merged config and rescan
-            ACTIVE_SITE_CONFIG = { ...SITE_CONFIG, ...changes.dakboxSiteConfig.newValue };
+            ACTIVE_SITE_CONFIG = { ...SITE_CONFIG };
+            for (const [domain, config] of Object.entries(changes.dakboxSiteConfig.newValue)) {
+                if (typeof config === 'string') {
+                    ACTIVE_SITE_CONFIG[domain] = config;
+                } else if (config.enabled) {
+                    ACTIVE_SITE_CONFIG[domain] = config.selector;
+                } else {
+                    delete ACTIVE_SITE_CONFIG[domain];
+                }
+            }
             if (autoGenerateEnabled) scanInputs();
         }
     });

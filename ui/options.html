@@ -125,6 +125,53 @@
             background-color: #64748b;
         }
 
+        /* Compact Toggle Switch for Tables */
+        .compact-toggle {
+            position: relative;
+            display: inline-block;
+            width: 36px;
+            height: 20px;
+            margin-right: 4px;
+        }
+
+        .compact-toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .compact-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--border-color);
+            transition: .4s;
+            border-radius: 20px;
+        }
+
+        .compact-slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        .compact-toggle input:checked+.compact-slider {
+            background-color: var(--success-color);
+        }
+
+        .compact-toggle input:checked+.compact-slider:before {
+            transform: translateX(16px);
+        }
+
         .add-form {
             display: flex;
             gap: 12px;
@@ -234,7 +281,7 @@
 <body>
 
     <div class="container">
-        <h1>⚙️ DakBox Auto Random Email Generator Site Config </h1>
+        <h1>⚙️ Auto Random Email Generator Site Config </h1>
         <p class="description" style="margin-bottom: 20px;">
             Configure custom CSS selectors to help DakBox find the correct email input field on specific websites.
             This overrides the default auto-detection rules.
@@ -280,7 +327,7 @@
                 <tr>
                     <th>Domain</th>
                     <th>CSS Selector</th>
-                    <th style="width: 140px;">Actions</th>
+                    <th style="width: 200px;">Actions</th>
                 </tr>
             </thead>
             <tbody id="config-tbody">
@@ -290,6 +337,74 @@
 
         <div id="empty-state" class="empty-state">
             No custom site configurations added yet.
+        </div>
+
+        <h1 style="margin-top: 60px;">🤖 Auto OTP Helper Site Config</h1>
+        <p class="description" style="margin-bottom: 20px;">
+            Add configurations for websites not officially supported by DakBox. Tell DakBox where to find the email,
+            how to detect submission, and where to inject the OTP code.
+        </p>
+
+        <div class="guidelines">
+            <h3>📖 OTP Helper Guidelines</h3>
+            <ul>
+                <li><strong>Email Selector:</strong> The input where the user types their DakBox email. (e.g.
+                    <code>#user_email</code>)
+                </li>
+                <li><strong>Trigger Selector:</strong> The button users click to send the OTP. DakBox listens to this to
+                    start fetching! (e.g. <code>button[type="submit"]</code>)</li>
+                <li><strong>OTP Box Selector:</strong> The input(s) where the code goes. If the site uses 6 separate
+                    boxes, DakBox will auto-split the code across them if they share a class like
+                    <code>.otp-digit</code>.
+                </li>
+                <li><strong>Expiry (Optional):</strong> If the site gives you 60 seconds, enter <code>60</code> to help
+                    DakBox filter older emails.</li>
+            </ul>
+        </div>
+
+        <div class="add-form" style="flex-wrap: wrap;">
+            <div class="form-group" style="min-width: 45%;">
+                <label for="otp-domain-input">Website Domain</label>
+                <input type="text" id="otp-domain-input" placeholder="e.g. example.com">
+            </div>
+            <div class="form-group" style="min-width: 45%;">
+                <label for="otp-email-input">Email Input Selector</label>
+                <input type="text" id="otp-email-input" placeholder="e.g. input[type='email']">
+            </div>
+            <div class="form-group" style="min-width: 30%;">
+                <label for="otp-trigger-input">Submit Button Selector</label>
+                <input type="text" id="otp-trigger-input" placeholder="e.g. button[type='submit']">
+            </div>
+            <div class="form-group" style="min-width: 30%;">
+                <label for="otp-box-input">OTP Box Selector</label>
+                <input type="text" id="otp-box-input" placeholder="e.g. .otp-input">
+            </div>
+            <div class="form-group" style="min-width: 20%;">
+                <label for="otp-expiry-input">Expiry (Seconds)</label>
+                <input type="number" id="otp-expiry-input" placeholder="e.g. 60" min="0">
+            </div>
+            <div style="width: 100%; display: flex; justify-content: flex-end; margin-top: 10px;">
+                <button class="primary" id="otp-save-btn">Add OTP Config</button>
+            </div>
+        </div>
+
+        <div id="otp-status-message"></div>
+
+        <table id="otp-config-table">
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Selectors</th>
+                    <th style="width: 200px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="otp-config-tbody">
+                <!-- Rows will be dynamically populated -->
+            </tbody>
+        </table>
+
+        <div id="otp-empty-state" class="empty-state">
+            No custom OTP configurations added yet.
         </div>
     </div>
 
