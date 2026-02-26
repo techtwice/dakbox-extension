@@ -14,7 +14,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Handle OTP fetch request (login OTP)
         if (request.action === 'fetchOtp') {
-            fetchOtpFromDakBox(request.username, request.maxRetries || 5)
+            fetchOtpFromDakBox(request.username, request.maxRetries || 5, request.expiry)
                 .then(result => sendResponse(result))
                 .catch(error => sendResponse({ success: false, error: error.message }));
             return true;
@@ -83,13 +83,17 @@ async function getApiToken() {
  * Fetch OTP from DakBox API (for login verification)
  * Uses dakbox.net/api/otp/get with Bearer token
  */
-async function fetchOtpFromDakBox(username, maxRetries = 5) {
+async function fetchOtpFromDakBox(username, maxRetries = 5, expirySeconds = null) {
     const token = await getApiToken();
     if (!token) {
         return { success: false, error: 'API token not set. Please connect in extension settings.' };
     }
 
-    const apiUrl = `https://dakbox.net/api/otp/get?email=${encodeURIComponent(username)}`;
+    let apiUrl = `https://dakbox.net/api/otp/get?email=${encodeURIComponent(username)}`;
+    if (expirySeconds) {
+        apiUrl += `&expiry=${encodeURIComponent(expirySeconds)}`;
+    }
+
     console.log(`[DakBox] Fetching OTP from: ${apiUrl}`);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {

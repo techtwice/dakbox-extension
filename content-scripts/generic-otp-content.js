@@ -16,8 +16,7 @@
     let checkInterval = null;
 
     // Load config to see if this site is supported
-    chrome.storage.local.get(['dakboxOtpSiteConfig', 'dakboxAutoOtpEnabled'], (data) => {
-        if (data.dakboxAutoOtpEnabled === false) return; // User globally disabled OTP filling
+    chrome.storage.local.get(['dakboxOtpSiteConfig'], (data) => {
         if (!data.dakboxOtpSiteConfig) return;
 
         otpConfig = data.dakboxOtpSiteConfig[hostname];
@@ -107,69 +106,39 @@
         });
     }
 
-    // Reuse the logic originally built for svp to fetch the OTP
+    // Reuse the logic originally built for svp to fetch the OTP via background script
     async function fetchRecentDakboxCode(emailAddress) {
         try {
-            const username = emailAddress.split('@')[0];
-            const domain = emailAddress.split('@')[1];
+            return new Promise((resolve) => {
+                const messagePayload = {
+                    action: 'fetchOtp',
+                    username: emailAddress,
+                    maxRetries: 1 // We handle our own retry loop in startOtpPolling
+                };
 
-            const listUrl = `https://api.dakbox.net/v1/mailbox/${username}?domain=${domain}`;
-            const response = await fetch(listUrl, {
-                headers: { 'Accept': 'application/json' }
-            });
-
-            if (!response.ok) return null;
-
-            const data = await response.json();
-            if (!data || !data.messages || data.messages.length === 0) return null;
-
-            // Sort by ID to ensure we look at the newest first
-            const messages = data.messages.sort((a, b) => b.id - a.id);
-            const latestMsg = messages[0];
-
-            // Check expiry if configured
-            if (otpConfig.expiry) {
-                const msgDate = new Date(latestMsg.created_at || latestMsg.date);
-                const ageSeconds = (Date.now() - msgDate.getTime()) / 1000;
-
-                if (ageSeconds > otpConfig.expiry) {
-                    console.log(`[DakBox] Mail found but older than expiry (${ageSeconds}s > ${otpConfig.expiry}s)`);
-                    return null;
+                // Add the expiry param if configured so the background script/server can handle it
+                if (otpConfig.expiry) {
+                    messagePayload.expiry = otpConfig.expiry;
                 }
-            }
 
-            // Fetch physical content
-            const contentUrl = `https://api.dakbox.net/v1/message/${latestMsg.id}`;
-            const cRes = await fetch(contentUrl, {
-                headers: { 'Accept': 'application/json' }
-            });
-
-            if (!cRes.ok) return null;
-
-            const cData = await cRes.json();
-
-            // Basic extraction (looking for 4-8 digit numbers usually)
-            const text = cData.text_body || cData.html_body || "";
-
-            // Common OTP patterns
-            const patterns = [
-                /[Cc]ode[\s:]*([0-9]{4,8})/i,
-                /OTP[\s:]*([0-9]{4,8})/i,
-                /(?<!\d)([0-9]{4,8})(?!\d)/ // fallback to any 4-8 standalone digit
-            ];
-
-            for (const pattern of patterns) {
-                const match = text.match(pattern);
-                if (match && match[1]) {
-                    // Check if it's not a generic year or similar false positive if using fallback
-                    if (pattern === patterns[2] && (match[1].length < 4 || (match[1].startsWith('202') && match[1].length === 4))) {
-                        continue;
+                chrome.runtime.sendMessage(messagePayload, (response) => {
+                    if (chrome.runtime.lastError) {
+                        console.error("[DakBox] Extension communication error:", chrome.runtime.lastError);
+                        resolve(null);
+                        return;
                     }
-                    return match[1];
-                }
-            }
 
-            return null;
+                    if (response && response.success && response.otp) {
+                        resolve(response.otp);
+                    } else {
+                        // The API didn't find a valid OTP or it was expired
+                        if (response && response.error) {
+                            console.log(`[DakBox] OTP fetch check: ${response.error}`);
+                        }
+                        resolve(null);
+                    }
+                });
+            });
 
         } catch (error) {
             console.error("[DakBox] Error fetching OTP:", error);
@@ -186,30 +155,30 @@
         console.log("[DakBox] Polling started.");
 
         checkInterval = setInterval(async () => {
-            // 1. Try to find the target input box first
-            // No point fetching if the page hasn't rendered the OTP box yet
-            const otpInputs = document.querySelectorAll(otpConfig.otpSelector);
+            attempts++;
 
-            if (otpInputs.length === 0) {
-                // Wait for the UI
-                attempts++;
-                if (attempts >= MAX_ATTEMPTS) stopPolling();
+            if (attempts >= MAX_ATTEMPTS) {
+                console.log("[DakBox] Polling timeout reached.");
+                stopPolling();
                 return;
             }
 
-            // 2. We see the inputs, let's look for the email
+            // Always try to fetch the OTP
             const otpCode = await fetchRecentDakboxCode(email);
 
             if (otpCode) {
                 console.log(`[DakBox] OTP Found: ${otpCode}`);
-                autoFillOtp(otpCode, otpInputs);
-                stopPolling();
-            }
 
-            attempts++;
-            if (attempts >= MAX_ATTEMPTS) {
-                console.log("[DakBox] Polling timeout reached.");
-                stopPolling();
+                // Try to find the target input box
+                const otpInputs = document.querySelectorAll(otpConfig.otpSelector);
+
+                if (otpInputs.length > 0) {
+                    autoFillOtp(otpCode, otpInputs);
+                    stopPolling();
+                } else {
+                    console.log("[DakBox] OTP found, but input fields not found. Waiting for UI...");
+                    // We keep polling. The user might navigate to the correct page soon.
+                }
             }
 
         }, 4000);

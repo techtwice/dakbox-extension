@@ -35,8 +35,22 @@
     let autoOpenInbox = true;
     let autoOpenYopmail = true;
 
-    chrome.storage.local.get(['dakboxAutoOtpEnabled', 'dakboxAutoOpenInbox', 'dakboxAutoOpenYopmail'], (data) => {
+    chrome.storage.local.get(['dakboxAutoOtpEnabled', 'dakboxAutoOpenInbox', 'dakboxAutoOpenYopmail', 'dakboxOtpSiteConfig'], (data) => {
+        // Assume default true if undefined
         autoOtpEnabled = data.dakboxAutoOtpEnabled !== false;
+
+        // Check if there is a custom site rule that overrides this setting
+        const hostname = window.location.hostname;
+        if (data.dakboxOtpSiteConfig && data.dakboxOtpSiteConfig[hostname]) {
+            const customConfig = data.dakboxOtpSiteConfig[hostname];
+            const isCustomEnabled = customConfig.enabled !== false;
+
+            if (isCustomEnabled) {
+                log(`[DakBox-SVP] Custom site config found and enabled for ${hostname}, OVERRIDING global Auto OTP setting.`);
+                autoOtpEnabled = true;
+            }
+        }
+
         autoOpenInbox = data.dakboxAutoOpenInbox !== false;
         autoOpenYopmail = data.dakboxAutoOpenYopmail !== false;
         log(`[DakBox-SVP] Settings loaded - Auto OTP: ${autoOtpEnabled}, Auto Open: ${autoOpenInbox}, Auto Yopmail: ${autoOpenYopmail}`);
@@ -45,10 +59,41 @@
     // Listen for real-time settings changes from the popup
     chrome.storage.onChanged.addListener((changes, areaName) => {
         if (areaName !== 'local') return;
+
+        // Handling dakboxOtpSiteConfig changes requires checking global state and logic again,
+        // but to keep it simple, we just reload the page or update if we see a change to the global button.
         if (changes.dakboxAutoOtpEnabled) {
             autoOtpEnabled = changes.dakboxAutoOtpEnabled.newValue !== false;
             log(`[DakBox-SVP] Auto OTP setting changed to: ${autoOtpEnabled}`);
+
+            // Re-check override
+            chrome.storage.local.get(['dakboxOtpSiteConfig'], (data) => {
+                const hostname = window.location.hostname;
+                if (data.dakboxOtpSiteConfig && data.dakboxOtpSiteConfig[hostname]) {
+                    if (data.dakboxOtpSiteConfig[hostname].enabled !== false) {
+                        autoOtpEnabled = true;
+                        log(`[DakBox-SVP] Auto OTP overridden back to TRUE by Custom Site Config`);
+                    }
+                }
+            });
         }
+
+        if (changes.dakboxOtpSiteConfig) {
+            const hostname = window.location.hostname;
+            const newConfigs = changes.dakboxOtpSiteConfig.newValue || {};
+            if (newConfigs[hostname] && newConfigs[hostname].enabled !== false) {
+                autoOtpEnabled = true;
+                log(`[DakBox-SVP] Auto OTP overridden to TRUE by new Custom Site Config`);
+            } else {
+                // We'd have to re-fetch dakboxAutoOtpEnabled to know what it was natively to restore it. 
+                // For simplicity, we just leave it. A page refresh will correctly initialize it.
+                chrome.storage.local.get(['dakboxAutoOtpEnabled'], (nativeData) => {
+                    autoOtpEnabled = nativeData.dakboxAutoOtpEnabled !== false;
+                    log(`[DakBox-SVP] Custom site config disabled, restored Auto OTP setting to: ${autoOtpEnabled}`);
+                });
+            }
+        }
+
         if (changes.dakboxAutoOpenInbox) {
             autoOpenInbox = changes.dakboxAutoOpenInbox.newValue !== false;
             log(`[DakBox-SVP] Auto Open Inbox setting changed to: ${autoOpenInbox}`);
@@ -69,15 +114,21 @@
     }
 
     // ─────────────────────────────────────────────
-    // checkForOtpVerificationPage
-    // EXACT COPY from SVPInternationalAutomation.checkForOtpVerificationPage
-    // ─────────────────────────────────────────────
+    let otpCheckAttempts = 0;
+    const MAX_OTP_CHECKS = 10;
 
     function checkForOtpVerificationPage() {
         // Don't re-check if already handling
         if (window.__svp_otp_handling_in_progress || window.__svp_otp_filled) {
             return;
         }
+
+        // Check if we've hit the maximum attempts without starting the flow
+        if (otpCheckAttempts >= MAX_OTP_CHECKS && !autoOtpEnabled) {
+            return;
+        }
+
+        otpCheckAttempts++;
 
         // Look for "Welcome back" heading
         const welcomeBackHeading = document.querySelector('h1, h2, h3, h4, h5, h6');
@@ -165,6 +216,10 @@
                 // Also auto-fill OTP
                 if (autoOtpEnabled) {
                     handleOtpAutoFill(dakboxEmail);
+                } else if (otpCheckAttempts >= MAX_OTP_CHECKS) {
+                    log("[SVP-OTP] Auto OTP is disabled and max view attempts reached. Stopping checks.");
+                    // Mark as filled so the observers stop firing
+                    window.__svp_otp_filled = true;
                 }
             } else if (yopmailEmail) {
                 log(`[SVP-OTP] Yopmail email found on page: ${yopmailEmail}`);
@@ -182,10 +237,18 @@
     // EXACT COPY from SVPInternationalAutomation.checkForRegistrationOtpPage
     // ─────────────────────────────────────────────
 
+    let regOtpCheckAttempts = 0;
+
     function checkForRegistrationOtpPage() {
         if (window.__svp_reg_otp_handling_in_progress || window.__svp_reg_otp_filled) {
             return;
         }
+
+        if (regOtpCheckAttempts >= MAX_OTP_CHECKS && !autoOtpEnabled) {
+            return;
+        }
+
+        regOtpCheckAttempts++;
 
         // Check for "Email verification" or "Account Verification" text
         const pageText = document.body.textContent || '';
@@ -276,6 +339,9 @@
             // Also auto-fill OTP
             if (autoOtpEnabled) {
                 handleRegistrationOtpAutoFill(dakboxEmail);
+            } else if (regOtpCheckAttempts >= MAX_OTP_CHECKS) {
+                log("[SVP-RegOTP] Auto OTP is disabled and max view attempts reached. Stopping checks.");
+                window.__svp_reg_otp_filled = true;
             }
         } else if (yopmailEmail) {
             log(`[SVP-RegOTP] Yopmail email found: ${yopmailEmail}`);
@@ -714,6 +780,7 @@
         // Reset flags for SPA navigation - allow re-checking on each navigation
         window.__svp_otp_filled = false;
         window.__svp_otp_handling_in_progress = false;
+        otpCheckAttempts = 0;
 
         // Clear any existing OTP observer interval
         if (window.__svp_otp_check_interval) {
@@ -776,6 +843,7 @@
         // Reset flags for fresh detection
         window.__svp_reg_otp_filled = false;
         window.__svp_reg_otp_handling_in_progress = false;
+        regOtpCheckAttempts = 0;
 
         // Clear any existing interval
         if (window.__svp_reg_otp_check_interval) {
