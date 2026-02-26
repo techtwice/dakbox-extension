@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleAutoOtp = document.getElementById('toggle-auto-otp');
     const toggleAutoOpen = document.getElementById('toggle-auto-open');
     const toggleAutoYopmail = document.getElementById('toggle-auto-yopmail');
+    const requestSiteBtn = document.getElementById('request-site-btn');
     const versionBadge = document.getElementById('version-badge');
 
     // ─────────────────────────────────────────────
@@ -345,6 +346,10 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleAutoYopmail.addEventListener('change', () => {
         chrome.storage.local.set({ dakboxAutoOpenYopmail: toggleAutoYopmail.checked });
         setStatus(`Auto open Yopmail ${toggleAutoYopmail.checked ? 'enabled' : 'disabled'}`, 'success');
+    });
+
+    requestSiteBtn.addEventListener('click', () => {
+        chrome.tabs.create({ url: 'https://dakbox.net/post/help-us-expand-dakbox-suggest-websites-for-seamless-otp-automation' });
     });
 
     // ─────────────────────────────────────────────
