@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleAutoOtp = document.getElementById('toggle-auto-otp');
     const toggleAutoOpen = document.getElementById('toggle-auto-open');
     const toggleAutoYopmail = document.getElementById('toggle-auto-yopmail');
+    const toggleAutoGenerate = document.getElementById('toggle-auto-generate');
     const requestSiteBtn = document.getElementById('request-site-btn');
     const versionBadge = document.getElementById('version-badge');
 
@@ -52,11 +53,13 @@ document.addEventListener('DOMContentLoaded', () => {
         'dakboxAutoOtpEnabled',
         'dakboxAutoOpenInbox',
         'dakboxAutoOpenYopmail',
+        'dakboxAutoGenerate',
         'dakboxLastUsername'
     ], (data) => {
         toggleAutoOtp.checked = data.dakboxAutoOtpEnabled !== false;
         toggleAutoOpen.checked = data.dakboxAutoOpenInbox !== false;
         toggleAutoYopmail.checked = data.dakboxAutoOpenYopmail !== false;
+        toggleAutoGenerate.checked = data.dakboxAutoGenerate !== false;
 
         if (data.dakboxLastUsername) {
             usernameInput.value = data.dakboxLastUsername;
@@ -346,6 +349,11 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleAutoYopmail.addEventListener('change', () => {
         chrome.storage.local.set({ dakboxAutoOpenYopmail: toggleAutoYopmail.checked });
         setStatus(`Auto open Yopmail ${toggleAutoYopmail.checked ? 'enabled' : 'disabled'}`, 'success');
+    });
+
+    toggleAutoGenerate.addEventListener('change', () => {
+        chrome.storage.local.set({ dakboxAutoGenerate: toggleAutoGenerate.checked });
+        setStatus(`Auto Random Email ${toggleAutoGenerate.checked ? 'enabled' : 'disabled'}`, 'success');
     });
 
     requestSiteBtn.addEventListener('click', () => {
