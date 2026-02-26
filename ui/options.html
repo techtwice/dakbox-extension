@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DakBox Site Configuration</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --surface-color: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --danger-color: #ef4444;
+            --danger-hover: #dc2626;
+            --border-color: #334155;
+            --success-color: #10b981;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background-color: var(--surface-color);
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-size: 24px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+        }
+
+        .description {
+            color: var(--text-muted);
+            margin-bottom: 30px;
+            line-height: 1.5;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            color: var(--text-muted);
+            font-weight: 500;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        td {
+            font-size: 14px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        button {
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        button.primary {
+            background-color: var(--accent-color);
+        }
+
+        button.primary:hover {
+            background-color: var(--accent-hover);
+        }
+
+        button.danger {
+            background-color: var(--danger-color);
+            padding: 6px 12px;
+        }
+
+        button.danger:hover {
+            background-color: var(--danger-hover);
+        }
+
+        button.edit-btn {
+            background-color: #475569;
+            padding: 6px 12px;
+        }
+
+        button.edit-btn:hover {
+            background-color: #64748b;
+        }
+
+        .add-form {
+            display: flex;
+            gap: 12px;
+            background-color: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 8px;
+            align-items: flex-end;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+        }
+
+        .form-group label {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        input {
+            background-color: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: white;
+            font-size: 14px;
+            outline: none;
+        }
+
+        input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        #status-message {
+            margin-top: 16px;
+            padding: 10px;
+            border-radius: 6px;
+            display: none;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        #status-message.success {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+            border: 1px solid var(--success-color);
+            display: block;
+        }
+
+        #status-message.error {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+            border: 1px solid var(--danger-color);
+            display: block;
+        }
+
+        .guidelines {
+            background-color: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid var(--accent-color);
+            padding: 16px 20px;
+            margin-bottom: 30px;
+            border-radius: 0 8px 8px 0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .guidelines h3 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-size: 16px;
+            color: var(--accent-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .guidelines ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .guidelines li {
+            margin-bottom: 8px;
+        }
+
+        .guidelines code {
+            background-color: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            color: #e2e8f0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>⚙️ DakBox Auto Generator Site Config</h1>
+        <p class="description" style="margin-bottom: 20px;">
+            Configure custom CSS selectors to help DakBox find the correct email input field on specific websites.
+            This overrides the default auto-detection rules.
+        </p>
+
+        <div class="guidelines">
+            <h3>📖 CSS Selector Guidelines</h3>
+            <ul>
+                <li><strong>By ID:</strong> If the input has <code>id="email_input"</code>, use
+                    <code>#email_input</code></li>
+                <li><strong>By Class:</strong> If the input has <code>class="user-email"</code>, use
+                    <code>.user-email</code></li>
+                <li><strong>By Name attribute:</strong> If the input has <code>name="login_email"</code>, use
+                    <code>input[name="login_email"]</code></li>
+                <li><strong>By Type attribute:</strong> If you just want the specific email field, use
+                    <code>input[type="email"]</code></li>
+                <li><strong>Combined:</strong> For more precision, chain them together, e.g.
+                    <code>.login-form input[name="email"]</code></li>
+            </ul>
+        </div>
+
+        <div class="add-form">
+            <div class="form-group">
+                <label for="domain-input">Website Domain</label>
+                <input type="text" id="domain-input" placeholder="e.g. example.com">
+            </div>
+            <div class="form-group">
+                <label for="selector-input">CSS Selector</label>
+                <input type="text" id="selector-input" placeholder="e.g. #user_email or .login-input[type='email']">
+            </div>
+            <button class="primary" id="save-btn">Add Site</button>
+        </div>
+
+        <div id="status-message"></div>
+
+        <table id="config-table">
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>CSS Selector</th>
+                    <th style="width: 140px;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="config-tbody">
+                <!-- Rows will be dynamically populated -->
+            </tbody>
+        </table>
+
+        <div id="empty-state" class="empty-state">
+            No custom site configurations added yet.
+        </div>
+    </div>
+
+    <script src="options.js"></script>
+</body>
+
+</html>

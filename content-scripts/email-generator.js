@@ -20,8 +20,10 @@
         "example.com": "#user_email",
         "anothersite.org": "input[name='email']",
         "complexsite.net": ".login-form .email-field"
-        // Add your custom sites and selectors here!
     };
+
+    // format in storage: dakboxSiteConfig key holding object identical to above.
+    let ACTIVE_SITE_CONFIG = { ...SITE_CONFIG };
 
     // The domain to use for generated emails
     const DAKBOX_DOMAIN = "dakbox.net";
@@ -252,9 +254,9 @@
         const hostname = window.location.hostname;
         let targetInputs = [];
 
-        // 1. Check Site Config first
-        if (SITE_CONFIG[hostname]) {
-            const configuredInputs = document.querySelectorAll(SITE_CONFIG[hostname]);
+        // 1. Check Site Config first (merged hardcoded and customized)
+        if (ACTIVE_SITE_CONFIG[hostname]) {
+            const configuredInputs = document.querySelectorAll(ACTIVE_SITE_CONFIG[hostname]);
             configuredInputs.forEach(input => targetInputs.push(input));
         }
 
@@ -281,9 +283,13 @@
     }
 
     // Read initial settings
-    chrome.storage.local.get(['dakboxAutoGenerate'], (data) => {
+    chrome.storage.local.get(['dakboxAutoGenerate', 'dakboxSiteConfig'], (data) => {
         if (data.dakboxAutoGenerate !== undefined) {
             autoGenerateEnabled = data.dakboxAutoGenerate;
+        }
+
+        if (data.dakboxSiteConfig) {
+            ACTIVE_SITE_CONFIG = { ...SITE_CONFIG, ...data.dakboxSiteConfig };
         }
 
         // Wait a second for initial render before first scan
@@ -309,6 +315,11 @@
                     input.style.paddingRight = ''; // Reset padding
                 });
             }
+        }
+        if (changes.dakboxSiteConfig) {
+            // Update merged config and rescan
+            ACTIVE_SITE_CONFIG = { ...SITE_CONFIG, ...changes.dakboxSiteConfig.newValue };
+            if (autoGenerateEnabled) scanInputs();
         }
     });
 

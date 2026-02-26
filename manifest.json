@@ -12,6 +12,10 @@
     "48": "assets/icon-48.png",
     "128": "assets/icon-128.png"
   },
+  "options_ui": {
+    "page": "ui/options.html",
+    "open_in_tab": true
+  },
   "background": {
     "service_worker": "core/background.js"
   },

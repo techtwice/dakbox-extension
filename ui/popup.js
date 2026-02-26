@@ -37,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleAutoYopmail = document.getElementById('toggle-auto-yopmail');
     const toggleAutoGenerate = document.getElementById('toggle-auto-generate');
     const requestSiteBtn = document.getElementById('request-site-btn');
+    const openOptionsBtn = document.getElementById('open-options-btn');
     const versionBadge = document.getElementById('version-badge');
 
     // ─────────────────────────────────────────────
@@ -359,6 +360,16 @@ document.addEventListener('DOMContentLoaded', () => {
     requestSiteBtn.addEventListener('click', () => {
         chrome.tabs.create({ url: 'https://dakbox.net/post/help-us-expand-dakbox-suggest-websites-for-seamless-otp-automation' });
     });
+
+    if (openOptionsBtn) {
+        openOptionsBtn.addEventListener('click', () => {
+            if (chrome.runtime.openOptionsPage) {
+                chrome.runtime.openOptionsPage();
+            } else {
+                window.open(chrome.runtime.getURL('ui/options.html'));
+            }
+        });
+    }
 
     // ─────────────────────────────────────────────
     // Helper Functions
