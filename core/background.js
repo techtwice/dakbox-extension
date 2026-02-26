@@ -4,6 +4,9 @@
  * Uses dakbox.net/api with Bearer token authentication
  */
 
+// --- Element Picker State ---
+let armedPickerField = null;
+
 // Listen for messages from popup and content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     try {
@@ -17,6 +20,51 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             fetchOtpFromDakBox(request.username, request.maxRetries || 5, request.expiry)
                 .then(result => sendResponse(result))
                 .catch(error => sendResponse({ success: false, error: error.message }));
+            return true;
+        }
+
+        // --- Element Picker Logic ---
+        if (request.action === 'armDakboxPicker') {
+            const targetField = request.target;
+
+            chrome.tabs.query({ windowType: 'normal' }, (tabs) => {
+                const validTabs = tabs.filter(t => t.url && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('chrome://'));
+
+                if (validTabs.length > 0) {
+                    validTabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+                    const targetTab = validTabs[0];
+
+                    chrome.scripting.insertCSS({
+                        target: { tabId: targetTab.id },
+                        files: ['content-scripts/element-picker.css']
+                    }).then(() => {
+                        return chrome.scripting.executeScript({
+                            target: { tabId: targetTab.id },
+                            files: ['content-scripts/element-picker.js']
+                        });
+                    }).then(() => {
+                        armedPickerField = targetField;
+                        sendResponse({ success: true, message: 'Picker activated in your most recent tab. Please switch to it!' });
+                    }).catch(err => {
+                        console.error("[DakBox] Failed to inject picker:", err);
+                        sendResponse({ success: false, error: err.message });
+                    });
+                } else {
+                    sendResponse({ success: false, error: 'No valid web tabs open to pick from.' });
+                }
+            });
+            return true;
+        }
+
+        if (request.action === 'dakboxPickerResult') {
+            chrome.runtime.sendMessage({
+                action: 'dakboxPickerResultToOptions',
+                selector: request.selector,
+                target: armedPickerField,
+                cancelled: request.cancelled
+            });
+            armedPickerField = null;
+            sendResponse({ success: true });
             return true;
         }
 

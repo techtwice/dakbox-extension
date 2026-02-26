@@ -275,6 +275,44 @@
             font-family: monospace;
             color: #e2e8f0;
         }
+
+        /* --- Element Picker Styles --- */
+        .input-with-picker {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .input-with-picker input {
+            flex-grow: 1;
+        }
+
+        .pick-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            transition: all 0.2s;
+            height: 38px;
+            width: 38px;
+            box-sizing: border-box;
+        }
+
+        .pick-btn:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            color: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        .pick-btn svg {
+            width: 18px;
+            height: 18px;
+        }
     </style>
 </head>
 
@@ -315,7 +353,20 @@
             </div>
             <div class="form-group">
                 <label for="selector-input">CSS Selector</label>
-                <input type="text" id="selector-input" placeholder="e.g. #user_email or .login-input[type='email']">
+                <div class="input-with-picker">
+                    <input type="text" id="selector-input" placeholder="e.g. #user_email or .login-input[type='email']">
+                    <button type="button" class="pick-btn" data-target="selector-input"
+                        title="Pick an element on the current page">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="22" y1="12" x2="18" y2="12"></line>
+                            <line x1="6" y1="12" x2="2" y2="12"></line>
+                            <line x1="12" y1="6" x2="12" y2="2"></line>
+                            <line x1="12" y1="22" x2="12" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <button class="primary" id="save-btn">Add Site</button>
         </div>
@@ -369,15 +420,54 @@
             </div>
             <div class="form-group" style="min-width: 45%;">
                 <label for="otp-email-input">Email Input Selector</label>
-                <input type="text" id="otp-email-input" placeholder="e.g. input[type='email']">
+                <div class="input-with-picker">
+                    <input type="text" id="otp-email-input" placeholder="e.g. input[type='email']">
+                    <button type="button" class="pick-btn" data-target="otp-email-input"
+                        title="Pick an element on the current page">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="22" y1="12" x2="18" y2="12"></line>
+                            <line x1="6" y1="12" x2="2" y2="12"></line>
+                            <line x1="12" y1="6" x2="12" y2="2"></line>
+                            <line x1="12" y1="22" x2="12" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="form-group" style="min-width: 30%;">
                 <label for="otp-trigger-input">Submit Button Selector</label>
-                <input type="text" id="otp-trigger-input" placeholder="e.g. button[type='submit']">
+                <div class="input-with-picker">
+                    <input type="text" id="otp-trigger-input" placeholder="e.g. button[type='submit']">
+                    <button type="button" class="pick-btn" data-target="otp-trigger-input"
+                        title="Pick an element on the current page">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="22" y1="12" x2="18" y2="12"></line>
+                            <line x1="6" y1="12" x2="2" y2="12"></line>
+                            <line x1="12" y1="6" x2="12" y2="2"></line>
+                            <line x1="12" y1="22" x2="12" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="form-group" style="min-width: 30%;">
                 <label for="otp-box-input">OTP Box Selector</label>
-                <input type="text" id="otp-box-input" placeholder="e.g. .otp-input">
+                <div class="input-with-picker">
+                    <input type="text" id="otp-box-input" placeholder="e.g. .otp-input">
+                    <button type="button" class="pick-btn" data-target="otp-box-input"
+                        title="Pick an element on the current page">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="22" y1="12" x2="18" y2="12"></line>
+                            <line x1="6" y1="12" x2="2" y2="12"></line>
+                            <line x1="12" y1="6" x2="12" y2="2"></line>
+                            <line x1="12" y1="22" x2="12" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="form-group" style="min-width: 20%;">
                 <label for="otp-expiry-input">Expiry (Seconds)</label>

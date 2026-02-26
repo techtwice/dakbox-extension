@@ -47,6 +47,35 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Element Picker Logic ---
+    document.querySelectorAll('.pick-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const targetId = e.currentTarget.getAttribute('data-target');
+            chrome.runtime.sendMessage({ action: 'armDakboxPicker', target: targetId }, (response) => {
+                if (response && response.success) {
+                    showStatus(response.message, 'success', 6000);
+                } else {
+                    showStatus('Error: ' + (response?.error || 'Could not start picker'), 'error', 4000);
+                }
+            });
+        });
+    });
+
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.action === 'dakboxPickerResultToOptions') {
+            if (request.selector) {
+                const inputEl = document.getElementById(request.target);
+                if (inputEl) {
+                    inputEl.value = request.selector;
+                    inputEl.focus();
+                    showStatus('Element selector picked successfully!', 'success');
+                }
+            } else if (request.cancelled) {
+                showStatus('Element picking cancelled.', 'error', 2000);
+            }
+        }
+    });
+
     // Render the table
     function renderTable() {
         configTbody.innerHTML = '';
@@ -203,14 +232,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function showStatus(message, type) {
+    function showStatus(message, type, timeout = 3000) {
         statusMessage.textContent = message;
         statusMessage.className = type;
+
+        // Use a generic placeholder if we're dealing with the OTP form so it shows up in both places
+        // or just use the main one. Since they are stacked, main one is usually fine.
+        const otpStatusMessage = document.getElementById('otp-status-message');
+        if (otpStatusMessage) {
+            otpStatusMessage.textContent = message;
+            otpStatusMessage.className = type;
+        }
 
         setTimeout(() => {
             statusMessage.style.display = 'none';
             statusMessage.className = '';
-        }, 3000);
+            if (otpStatusMessage) {
+                otpStatusMessage.style.display = 'none';
+                otpStatusMessage.className = '';
+            }
+        }, timeout);
     }
 
     // Add or Update Entry
