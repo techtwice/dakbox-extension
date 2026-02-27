@@ -8,9 +8,12 @@ Enhance your DakBox.net temporary email experience with automatic OTP (One-Time 
 
 ## ✨ Features
 
+- 🎲 **Auto Random Email Generation:** Quickly generate and fill temporary email addresses into any form field.
 - 📬 **Quick Inbox Access:** Easily access your DakBox.net temporary email directly from the extension popup.
 - ⚡ **Auto OTP Extraction:** Automatically detect and extract One-Time Passwords from incoming emails.
-- 🤖 **Auto-Fill Functionality:** Automatically fill verification codes on supported platforms (like `svp-international.pacc.sa`).
+- 🎯 **Visual Element Picker:** Easily configure custom CSS selectors for any site using a built-in visual point-and-click tool.
+- ⚙️ **Custom Site Configurations:** Define specific rules for any website, including custom OTP fields and auto-submit behavior.
+- 🤖 **Auto-Fill Functionality:** Automatically fill verification codes on supported platforms.
 - 🔒 **Privacy Focused:** Operates locally in your browser to maintain your privacy while using temporary emails.
 
 ## 🚀 Installation
@@ -43,6 +46,9 @@ To try out this extension locally or contribute to its development:
 
 Current out-of-the-box support for automatic OTP filling includes:
 - `svp-international.pacc.sa`
+
+**Any Custom Website!** 
+You can now use the Options menu (`Right-click Extension > Options`) to visually map OTP fields for *any* custom site, giving you full control over where and how verification codes are handled.
 
 ## 📄 Manifest V3
 
