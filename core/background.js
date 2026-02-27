@@ -246,11 +246,19 @@ async function fetchOtpFromDakBox(username, maxRetries = 5, expirySeconds = null
             };
 
         } catch (error) {
-            console.error(`[DakBox] Attempt ${attempt}/${maxRetries} failed:`, error);
+            // Treat 404 (Not Found) and 410 (Gone) as "silent" failures during polling
+            const isSilentError = error.message.includes('404') || error.message.includes('410') || error.message.includes('No OTP email found');
+            
+            if (isSilentError) {
+                console.log(`[DakBox] Polling check: No OTP found yet (Attempt ${attempt}/${maxRetries})`);
+            } else {
+                console.error(`[DakBox] Attempt ${attempt}/${maxRetries} failed:`, error);
+            }
+
             if (attempt < maxRetries) {
                 await new Promise(resolve => setTimeout(resolve, 3000));
             } else {
-                return { success: false, error: error.message };
+                return { success: false, error: error.message, isSilent: isSilentError };
             }
         }
     }

@@ -427,55 +427,56 @@
     // ─────────────────────────────────────────────
 
     async function handleOtpAutoFill(email) {
-        log(`[SVP-OTP] Starting auto OTP fill for: ${email}`);
+        log(`[SVP-OTP] Starting auto OTP fill sequence for: ${email}`);
 
         // Prevent duplicate handling
-        if (window.__svp_otp_handling_in_progress) {
-            log("[SVP-OTP] OTP handling already in progress, skipping");
-            return;
-        }
+        if (window.__svp_otp_handling_in_progress) return;
         window.__svp_otp_handling_in_progress = true;
 
+        let fetchAttempts = 0;
+        const MAX_FETCH_ATTEMPTS = 15; // 15 * 5s = 75 seconds total wait
+
         try {
-            // Extract username from email (part before @dakbox.net)
             const emailMatch = email.match(/^([^@]+)@dakbox\.net$/i);
-            if (!emailMatch) {
-                throw new Error(`Invalid dakbox.net email format: ${email}`);
-            }
+            if (!emailMatch) throw new Error(`Invalid dakbox.net email format: ${email}`);
             const username = emailMatch[1];
-            log(`[SVP-OTP] Extracted username: ${username}`);
 
-            // Wait a moment for OTP email to arrive
-            log("[SVP-OTP] Waiting 3 seconds for OTP email to arrive...");
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            while (fetchAttempts < MAX_FETCH_ATTEMPTS && !window.__svp_otp_filled) {
+                fetchAttempts++;
+                log(`[SVP-OTP] Fetch attempt ${fetchAttempts}/${MAX_FETCH_ATTEMPTS} for ${username}...`);
 
-            // Fetch OTP from DakBox API (via background service worker)
-            const otpResult = await fetchOtpFromDakBox(username);
+                // Fetch OTP from DakBox API (maxRetries 1 because we loop here)
+                const otpResult = await fetchOtpFromDakBox(username, 1);
 
-            if (!otpResult.success) {
-                throw new Error(otpResult.error || "Failed to fetch OTP");
+                if (otpResult.success && otpResult.otp) {
+                    log(`[SVP-OTP] OTP fetched successfully: ${otpResult.otp}`);
+                    const fillSuccess = await fillVerificationCode(otpResult.otp);
+                    if (fillSuccess) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await clickSignInButton();
+                        window.__svp_otp_filled = true;
+                        log("[SVP-OTP] Auto OTP process completed successfully");
+                        break;
+                    }
+                } else if (otpResult.expired) {
+                    log("[SVP-OTP] OTP is already expired on server.");
+                }
+
+                if (fetchAttempts < MAX_FETCH_ATTEMPTS) {
+                    log("[SVP-OTP] OTP not found yet, waiting 5s...");
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                }
             }
 
-            log(`[SVP-OTP] OTP fetched successfully: ${otpResult.otp}`);
-
-            // Fill the verification code inputs
-            const fillSuccess = await fillVerificationCode(otpResult.otp);
-
-            if (!fillSuccess) {
-                throw new Error("Failed to fill verification code inputs");
+            if (!window.__svp_otp_filled) {
+                warn("[SVP-OTP] Reached max fetch attempts or failed to fill. Stopping for this page load.");
+                // Mark as filled anyway to stop the global observer from restarting this cycle indefinitely
+                window.__svp_otp_filled = true;
             }
-
-            log("[SVP-OTP] Verification code filled successfully");
-
-            // Wait a moment then click Sign in button
-            await new Promise(resolve => setTimeout(resolve, 500));
-            await clickSignInButton();
-
-            window.__svp_otp_filled = true;
-            log("[SVP-OTP] Auto OTP process completed successfully");
 
         } catch (err) {
             error("[SVP-OTP] Auto OTP fill failed:", err);
+            window.__svp_otp_filled = true; // Stop observer
         } finally {
             window.__svp_otp_handling_in_progress = false;
         }
@@ -489,49 +490,45 @@
     async function handleRegistrationOtpAutoFill(email) {
         log(`[SVP-RegOTP] Starting auto OTP fill for registration: ${email}`);
 
-        if (window.__svp_reg_otp_handling_in_progress) {
-            log("[SVP-RegOTP] Already handling, skipping");
-            return;
-        }
+        if (window.__svp_reg_otp_handling_in_progress) return;
         window.__svp_reg_otp_handling_in_progress = true;
 
+        let fetchAttempts = 0;
+        const MAX_FETCH_ATTEMPTS = 15;
+
         try {
-            // Extract username from email
             const emailMatch = email.match(/^([^@]+)@dakbox\.net$/i);
-            if (!emailMatch) {
-                throw new Error(`Invalid dakbox.net email format: ${email}`);
-            }
+            if (!emailMatch) throw new Error(`Invalid dakbox.net email format: ${email}`);
             const username = emailMatch[1];
-            log(`[SVP-RegOTP] Extracted username: ${username}`);
 
-            // Wait for OTP email to arrive
-            log("[SVP-RegOTP] Waiting 3 seconds for OTP email to arrive...");
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            while (fetchAttempts < MAX_FETCH_ATTEMPTS && !window.__svp_reg_otp_filled) {
+                fetchAttempts++;
+                log(`[SVP-RegOTP] Fetch attempt ${fetchAttempts}/${MAX_FETCH_ATTEMPTS} for ${username}...`);
 
-            // Fetch OTP from verification API (different endpoint for registration)
-            const otpResult = await fetchRegistrationOtp(username);
+                const otpResult = await fetchRegistrationOtp(username, 1);
 
-            if (!otpResult.success) {
-                throw new Error(otpResult.error || "Failed to fetch OTP");
+                if (otpResult.success && otpResult.otp) {
+                    log(`[SVP-RegOTP] OTP fetched successfully: ${otpResult.otp}`);
+                    const fillSuccess = await fillVerificationCode(otpResult.otp);
+                    if (fillSuccess) {
+                        window.__svp_reg_otp_filled = true;
+                        log("[SVP-RegOTP] Auto OTP process completed successfully (Continue NOT clicked)");
+                        break;
+                    }
+                }
+
+                if (fetchAttempts < MAX_FETCH_ATTEMPTS) {
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                }
             }
 
-            log(`[SVP-RegOTP] OTP fetched successfully: ${otpResult.otp}`);
-
-            // Fill the verification code inputs (reuse existing method)
-            const fillSuccess = await fillVerificationCode(otpResult.otp);
-
-            if (!fillSuccess) {
-                throw new Error("Failed to fill verification code inputs");
+            if (!window.__svp_reg_otp_filled) {
+                window.__svp_reg_otp_filled = true; // Stop observer
             }
-
-            log("[SVP-RegOTP] Verification code filled successfully");
-            log("[SVP-RegOTP] NOT clicking Continue - user will handle reCAPTCHA and Continue");
-
-            window.__svp_reg_otp_filled = true;
-            log("[SVP-RegOTP] Auto OTP process completed successfully (Continue NOT clicked)");
 
         } catch (err) {
             error("[SVP-RegOTP] Auto OTP fill failed:", err);
+            window.__svp_reg_otp_filled = true;
         } finally {
             window.__svp_reg_otp_handling_in_progress = false;
         }

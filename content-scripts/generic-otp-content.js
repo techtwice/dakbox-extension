@@ -123,7 +123,8 @@
 
                 chrome.runtime.sendMessage(messagePayload, (response) => {
                     if (chrome.runtime.lastError) {
-                        console.error("[DakBox] Extension communication error:", chrome.runtime.lastError);
+                        // Extension might have reloaded, stop polling
+                        stopPolling();
                         resolve(null);
                         return;
                     }
@@ -132,7 +133,8 @@
                         resolve(response.otp);
                     } else {
                         // The API didn't find a valid OTP or it was expired
-                        if (response && response.error) {
+                        // Only log if it's NOT a silent "not found yet" error
+                        if (response && response.error && !response.isSilent) {
                             console.log(`[DakBox] OTP fetch check: ${response.error}`);
                         }
                         resolve(null);
@@ -150,9 +152,9 @@
         if (checkInterval) clearInterval(checkInterval);
 
         let attempts = 0;
-        const MAX_ATTEMPTS = 30; // 30 * 4 seconds = 2 minutes max polling
+        const MAX_ATTEMPTS = 20; // 20 * 4 seconds = 80 seconds max polling
 
-        console.log("[DakBox] Polling started.");
+        console.log(`[DakBox] Polling started for ${email}. (Max ${MAX_ATTEMPTS} checks)`);
 
         checkInterval = setInterval(async () => {
             attempts++;
