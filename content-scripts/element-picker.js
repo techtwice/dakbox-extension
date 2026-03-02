@@ -35,7 +35,7 @@
     function handleMouseMove(e) {
         // Ignore our own UI
         if (e.target.closest('#dakbox-picker-ui') || e.target.id === 'dakbox-picker-highlight') {
-            highlightBox.style.display = 'none';
+            highlightBox.style.setProperty('display', 'none', 'important');
             currentTarget = null;
             return;
         }
@@ -44,11 +44,11 @@
         const rect = currentTarget.getBoundingClientRect();
 
         // Update highlight box position and size
-        highlightBox.style.display = 'block';
-        highlightBox.style.top = (rect.top + window.scrollY) + 'px';
-        highlightBox.style.left = (rect.left + window.scrollX) + 'px';
-        highlightBox.style.width = rect.width + 'px';
-        highlightBox.style.height = rect.height + 'px';
+        highlightBox.style.setProperty('display', 'block', 'important');
+        highlightBox.style.setProperty('top', (rect.top + window.scrollY) + 'px', 'important');
+        highlightBox.style.setProperty('left', (rect.left + window.scrollX) + 'px', 'important');
+        highlightBox.style.setProperty('width', rect.width + 'px', 'important');
+        highlightBox.style.setProperty('height', rect.height + 'px', 'important');
     }
 
     function handleClick(e) {
