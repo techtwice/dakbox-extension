@@ -248,7 +248,7 @@ async function fetchOtpFromDakBox(username, maxRetries = 5, expirySeconds = null
         } catch (error) {
             // Treat 404 (Not Found) and 410 (Gone) as "silent" failures during polling
             const isSilentError = error.message.includes('404') || error.message.includes('410') || error.message.includes('No OTP email found');
-            
+
             if (isSilentError) {
                 console.log(`[DakBox] Polling check: No OTP found yet (Attempt ${attempt}/${maxRetries})`);
             } else {

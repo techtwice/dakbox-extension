@@ -113,7 +113,7 @@
                 const messagePayload = {
                     action: 'fetchOtp',
                     username: emailAddress,
-                    maxRetries: 1 // We handle our own retry loop in startOtpPolling
+                    maxRetries: 15 // Let background.js handle the polling loop (15 retries * 3s)
                 };
 
                 // Add the expiry param if configured so the background script/server can handle it
@@ -148,42 +148,43 @@
         }
     }
 
-    function startOtpPolling(email) {
+    async function startOtpPolling(email) {
         if (checkInterval) clearInterval(checkInterval);
 
-        let attempts = 0;
-        const MAX_ATTEMPTS = 20; // 20 * 4 seconds = 80 seconds max polling
+        console.log(`[DakBox] Polling started for ${email}. (Max 15 background checks)`);
 
-        console.log(`[DakBox] Polling started for ${email}. (Max ${MAX_ATTEMPTS} checks)`);
+        // Always try to fetch the OTP. The background script will retry up to 15 times internally.
+        const otpCode = await fetchRecentDakboxCode(email);
 
-        checkInterval = setInterval(async () => {
-            attempts++;
+        if (otpCode) {
+            console.log(`[DakBox] OTP Found: ${otpCode}`);
 
-            if (attempts >= MAX_ATTEMPTS) {
-                console.log("[DakBox] Polling timeout reached.");
+            // Try to find the target input box
+            const otpInputs = document.querySelectorAll(otpConfig.otpSelector);
+
+            if (otpInputs.length > 0) {
+                autoFillOtp(otpCode, otpInputs, otpConfig);
                 stopPolling();
-                return;
-            }
+            } else {
+                console.log("[DakBox] OTP found, but input fields not found. Waiting for UI...");
+                // Start a short interval just to wait for the UI
+                checkInterval = setInterval(() => {
+                    const latestInputs = document.querySelectorAll(otpConfig.otpSelector);
+                    if (latestInputs.length > 0) {
+                        autoFillOtp(otpCode, latestInputs, otpConfig);
+                        stopPolling();
+                    }
+                }, 1000);
 
-            // Always try to fetch the OTP
-            const otpCode = await fetchRecentDakboxCode(email);
-
-            if (otpCode) {
-                console.log(`[DakBox] OTP Found: ${otpCode}`);
-
-                // Try to find the target input box
-                const otpInputs = document.querySelectorAll(otpConfig.otpSelector);
-
-                if (otpInputs.length > 0) {
-                    autoFillOtp(otpCode, otpInputs, otpConfig);
+                // Stop waiting for UI after 10 seconds
+                setTimeout(() => {
                     stopPolling();
-                } else {
-                    console.log("[DakBox] OTP found, but input fields not found. Waiting for UI...");
-                    // We keep polling. The user might navigate to the correct page soon.
-                }
+                }, 10000);
             }
-
-        }, 4000);
+        } else {
+            console.log("[DakBox] Polling timeout reached.");
+            stopPolling();
+        }
     }
 
     function stopPolling() {

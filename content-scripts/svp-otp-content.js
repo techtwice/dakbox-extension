@@ -421,11 +421,6 @@
         }
     }
 
-    // ─────────────────────────────────────────────
-    // handleOtpAutoFill
-    // EXACT COPY from SVPInternationalAutomation.handleOtpAutoFill
-    // ─────────────────────────────────────────────
-
     async function handleOtpAutoFill(email) {
         log(`[SVP-OTP] Starting auto OTP fill sequence for: ${email}`);
 
@@ -433,44 +428,33 @@
         if (window.__svp_otp_handling_in_progress) return;
         window.__svp_otp_handling_in_progress = true;
 
-        let fetchAttempts = 0;
-        const MAX_FETCH_ATTEMPTS = 15; // 15 * 5s = 75 seconds total wait
-
         try {
             const emailMatch = email.match(/^([^@]+)@dakbox\.net$/i);
             if (!emailMatch) throw new Error(`Invalid dakbox.net email format: ${email}`);
             const username = emailMatch[1];
 
-            while (fetchAttempts < MAX_FETCH_ATTEMPTS && !window.__svp_otp_filled) {
-                fetchAttempts++;
-                log(`[SVP-OTP] Fetch attempt ${fetchAttempts}/${MAX_FETCH_ATTEMPTS} for ${username}...`);
+            log(`[SVP-OTP] Fetching OTP using background polling (max 15 attempts) for ${username}...`);
 
-                // Fetch OTP from DakBox API (maxRetries 1 because we loop here)
-                const otpResult = await fetchOtpFromDakBox(username, 1);
+            // Fetch OTP from DakBox API (maxRetries 15 inside background.js)
+            const otpResult = await fetchOtpFromDakBox(username, 15);
 
-                if (otpResult.success && otpResult.otp) {
-                    log(`[SVP-OTP] OTP fetched successfully: ${otpResult.otp}`);
-                    const fillSuccess = await fillVerificationCode(otpResult.otp);
-                    if (fillSuccess) {
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                        await clickSignInButton();
-                        window.__svp_otp_filled = true;
-                        log("[SVP-OTP] Auto OTP process completed successfully");
-                        break;
-                    }
-                } else if (otpResult.expired) {
-                    log("[SVP-OTP] OTP is already expired on server.");
+            if (otpResult.success && otpResult.otp) {
+                log(`[SVP-OTP] OTP fetched successfully: ${otpResult.otp}`);
+                const fillSuccess = await fillVerificationCode(otpResult.otp);
+                if (fillSuccess) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await clickSignInButton();
+                    window.__svp_otp_filled = true;
+                    log("[SVP-OTP] Auto OTP process completed successfully");
+                } else {
+                    warn("[SVP-OTP] Failed to fill OTP. Stopping for this page load.");
+                    window.__svp_otp_filled = true;
                 }
-
-                if (fetchAttempts < MAX_FETCH_ATTEMPTS) {
-                    log("[SVP-OTP] OTP not found yet, waiting 5s...");
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                }
-            }
-
-            if (!window.__svp_otp_filled) {
-                warn("[SVP-OTP] Reached max fetch attempts or failed to fill. Stopping for this page load.");
-                // Mark as filled anyway to stop the global observer from restarting this cycle indefinitely
+            } else if (otpResult.expired) {
+                log("[SVP-OTP] OTP is already expired on server.");
+                window.__svp_otp_filled = true;
+            } else {
+                warn("[SVP-OTP] Background polling reached max attempts or failed to find OTP. Stopping for this page load.");
                 window.__svp_otp_filled = true;
             }
 
@@ -493,36 +477,27 @@
         if (window.__svp_reg_otp_handling_in_progress) return;
         window.__svp_reg_otp_handling_in_progress = true;
 
-        let fetchAttempts = 0;
-        const MAX_FETCH_ATTEMPTS = 15;
-
         try {
             const emailMatch = email.match(/^([^@]+)@dakbox\.net$/i);
             if (!emailMatch) throw new Error(`Invalid dakbox.net email format: ${email}`);
             const username = emailMatch[1];
 
-            while (fetchAttempts < MAX_FETCH_ATTEMPTS && !window.__svp_reg_otp_filled) {
-                fetchAttempts++;
-                log(`[SVP-RegOTP] Fetch attempt ${fetchAttempts}/${MAX_FETCH_ATTEMPTS} for ${username}...`);
+            log(`[SVP-RegOTP] Fetching Registration OTP using background polling (max 15 attempts) for ${username}...`);
 
-                const otpResult = await fetchRegistrationOtp(username, 1);
+            // Fetch OTP directly, passing maxRetries 15 to the background worker
+            const otpResult = await fetchRegistrationOtp(username, 15);
 
-                if (otpResult.success && otpResult.otp) {
-                    log(`[SVP-RegOTP] OTP fetched successfully: ${otpResult.otp}`);
-                    const fillSuccess = await fillVerificationCode(otpResult.otp);
-                    if (fillSuccess) {
-                        window.__svp_reg_otp_filled = true;
-                        log("[SVP-RegOTP] Auto OTP process completed successfully (Continue NOT clicked)");
-                        break;
-                    }
+            if (otpResult.success && otpResult.otp) {
+                log(`[SVP-RegOTP] OTP fetched successfully: ${otpResult.otp}`);
+                const fillSuccess = await fillVerificationCode(otpResult.otp);
+                if (fillSuccess) {
+                    window.__svp_reg_otp_filled = true;
+                    log("[SVP-RegOTP] Auto OTP process completed successfully (Continue NOT clicked)");
+                } else {
+                    window.__svp_reg_otp_filled = true;
                 }
-
-                if (fetchAttempts < MAX_FETCH_ATTEMPTS) {
-                    await new Promise(resolve => setTimeout(resolve, 5000));
-                }
-            }
-
-            if (!window.__svp_reg_otp_filled) {
+            } else {
+                warn("[SVP-RegOTP] Background polling reached max attempts or failed to find OTP. Stopping for this page load.");
                 window.__svp_reg_otp_filled = true; // Stop observer
             }
 
