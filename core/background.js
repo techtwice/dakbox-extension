@@ -7,6 +7,20 @@
 // --- Element Picker State ---
 let armedPickerField = null;
 
+// --- Helper functions ---
+async function getWebsiteHostname(sender) {
+    if (sender && sender.tab && sender.tab.url) {
+        try { return new URL(sender.tab.url).hostname; } catch (e) { }
+    }
+    try {
+        const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tabs && tabs.length > 0 && tabs[0].url) {
+            return new URL(tabs[0].url).hostname;
+        }
+    } catch (e) { }
+    return '';
+}
+
 // Listen for messages from popup and content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     try {
@@ -17,9 +31,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Handle OTP fetch request (login OTP)
         if (request.action === 'fetchOtp') {
-            fetchOtpFromDakBox(request.username, request.maxRetries || 5, request.expiry)
-                .then(result => sendResponse(result))
-                .catch(error => sendResponse({ success: false, error: error.message }));
+            getWebsiteHostname(sender).then(website => {
+                fetchOtpFromDakBox(request.username, request.maxRetries || 5, request.expiry, website)
+                    .then(result => sendResponse(result))
+                    .catch(error => sendResponse({ success: false, error: error.message }));
+            });
             return true;
         }
 
@@ -70,9 +86,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Handle registration OTP fetch request
         if (request.action === 'fetchRegistrationOtp') {
-            fetchRegistrationOtp(request.username, request.maxRetries || 5)
-                .then(result => sendResponse(result))
-                .catch(error => sendResponse({ success: false, error: error.message }));
+            getWebsiteHostname(sender).then(website => {
+                fetchRegistrationOtp(request.username, request.maxRetries || 5, website)
+                    .then(result => sendResponse(result))
+                    .catch(error => sendResponse({ success: false, error: error.message }));
+            });
             return true;
         }
 
@@ -131,7 +149,7 @@ async function getApiToken() {
  * Fetch OTP from DakBox API (for login verification)
  * Uses dakbox.net/api/otp/get with Bearer token
  */
-async function fetchOtpFromDakBox(username, maxRetries = 5, expirySeconds = null) {
+async function fetchOtpFromDakBox(username, maxRetries = 5, expirySeconds = null, website = '') {
     const token = await getApiToken();
     if (!token) {
         return { success: false, error: 'API token not set. Please connect in extension settings.' };
@@ -140,6 +158,9 @@ async function fetchOtpFromDakBox(username, maxRetries = 5, expirySeconds = null
     let apiUrl = `https://dakbox.net/api/otp/get?email=${encodeURIComponent(username)}`;
     if (expirySeconds) {
         apiUrl += `&expiry=${encodeURIComponent(expirySeconds)}`;
+    }
+    if (website) {
+        apiUrl += `&website=${encodeURIComponent(website)}`;
     }
 
     console.log(`[DakBox] Fetching OTP from: ${apiUrl}`);
@@ -270,13 +291,16 @@ async function fetchOtpFromDakBox(username, maxRetries = 5, expirySeconds = null
  * Fetch OTP from verification API (for registration verification)
  * Uses dakbox.net/api/otp/verification with Bearer token
  */
-async function fetchRegistrationOtp(username, maxRetries = 5) {
+async function fetchRegistrationOtp(username, maxRetries = 5, website = '') {
     const token = await getApiToken();
     if (!token) {
         return { success: false, error: 'API token not set. Please connect in extension settings.' };
     }
 
-    const apiUrl = `https://dakbox.net/api/otp/verification?email=${encodeURIComponent(username)}`;
+    let apiUrl = `https://dakbox.net/api/otp/verification?email=${encodeURIComponent(username)}`;
+    if (website) {
+        apiUrl += `&website=${encodeURIComponent(website)}`;
+    }
     console.log(`[DakBox] Fetching registration OTP from: ${apiUrl}`);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
