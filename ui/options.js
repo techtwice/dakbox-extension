@@ -568,7 +568,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let allConfigs = [];
         try {
-            const token    = await getAuthToken();
+            const token = await getAuthToken();
+            if (!token) {
+                // Not connected — show empty state instead of error
+                if (otpServerLoadingEl) otpServerLoadingEl.style.display = 'none';
+                if (otpServerErrorEl)   otpServerErrorEl.style.display   = 'none';
+                if (defaultLoadingEl)   defaultLoadingEl.style.display   = 'none';
+                if (defaultErrorEl)     defaultErrorEl.style.display     = 'none';
+                if (otpEmptyState)      otpEmptyState.style.display      = 'flex';
+                if (defaultEmptyEl)     defaultEmptyEl.style.display     = 'flex';
+                return;
+            }
             const response = await fetch(OTP_API_URL, {
                 method: 'GET',
                 redirect: 'follow',
