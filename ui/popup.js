@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const planExpires = document.getElementById('plan-expires');
     const planEmail = document.getElementById('plan-email');
     const planOtpUsage = document.getElementById('plan-otp-usage');
+    const planAutoOpens = document.getElementById('plan-auto-opens');
     const disconnectBtn = document.getElementById('disconnect-btn');
 
     // Connected view elements
@@ -55,7 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
         'dakboxAutoOpenInbox',
         'dakboxAutoOpenYopmail',
         'dakboxAutoGenerate',
-        'dakboxLastUsername'
+        'dakboxLastUsername',
+        'dakboxAutoOpenCount',
+        'dakboxAutoOpenMonthKey'
     ], (data) => {
         toggleAutoOtp.checked = data.dakboxAutoOtpEnabled !== false;
         toggleAutoOpen.checked = data.dakboxAutoOpenInbox !== false;
@@ -70,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.dakboxApiToken) {
             // Token exists - show connected view
             showConnectedView(data.dakboxUserInfo);
+            refreshAutoOpens(data.dakboxUserInfo, data.dakboxAutoOpenCount, data.dakboxAutoOpenMonthKey);
             // Refresh user info in background
             verifyToken(data.dakboxApiToken, true);
         } else {
@@ -115,6 +119,34 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch {
             return dateStr;
+        }
+    }
+
+    /**
+     * Reads the auto-open counter from storage and renders it in the plan section.
+     * @param {object} userInfo  - stored user info (planStatus used to detect Premium)
+     * @param {number} count     - raw count from storage
+     * @param {string} monthKey  - stored month key (YYYY-MM)
+     */
+    function refreshAutoOpens(userInfo, count, monthKey) {
+        if (!planAutoOpens) return;
+
+        // Reset count if it's a new month
+        const now = new Date();
+        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const effectiveCount = (monthKey === currentMonthKey) ? (count || 0) : 0;
+
+        const isPremium = userInfo && userInfo.planStatus === 'active' && !userInfo.planName?.toLowerCase().includes('free');
+        const FREE_LIMIT = 1;
+
+        if (isPremium) {
+            planAutoOpens.textContent = `${effectiveCount} / ∞`;
+            planAutoOpens.style.color = '';
+        } else {
+            planAutoOpens.textContent = `${effectiveCount} / ${FREE_LIMIT}`;
+            // Red tint when at or near limit
+            planAutoOpens.style.color = effectiveCount >= FREE_LIMIT ? '#e94560'
+                : effectiveCount >= FREE_LIMIT * 0.8 ? '#faad14' : '';
         }
     }
 
@@ -201,6 +233,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 showConnectedView(userInfo);
+                // Refresh auto-open counter display
+                chrome.storage.local.get(['dakboxAutoOpenCount', 'dakboxAutoOpenMonthKey'], (c) => {
+                    refreshAutoOpens(userInfo, c.dakboxAutoOpenCount, c.dakboxAutoOpenMonthKey);
+                });
                 if (!silent) setApiStatus('Connected successfully!', 'success');
             } else {
                 if (!silent) setApiStatus('Invalid response from API', 'error');

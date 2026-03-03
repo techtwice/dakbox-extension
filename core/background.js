@@ -53,11 +53,44 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Open a new tab (used for auto-opening DakBox/Yopmail inboxes from content scripts)
         if (request.action === 'openTab') {
-            if (request.url) {
-                chrome.tabs.create({ url: request.url });
+            if (!request.url) {
+                sendResponse({ success: false, error: 'No URL provided' });
+                return;
             }
-            sendResponse({ success: true });
-            return;
+
+            chrome.storage.local.get(['dakboxUserInfo', 'dakboxAutoOpenCount', 'dakboxAutoOpenMonthKey'], (data) => {
+                const now = new Date();
+                const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+                // Reset count if we're in a new month
+                let count = data.dakboxAutoOpenCount || 0;
+                if (data.dakboxAutoOpenMonthKey !== currentMonthKey) {
+                    count = 0;
+                }
+
+                const userInfo = data.dakboxUserInfo || {};
+                const isPremium = userInfo && userInfo.planStatus === 'active' && !userInfo.planName?.toLowerCase().includes('free');
+                const FREE_LIMIT = 1;
+
+                if (!isPremium && count >= FREE_LIMIT) {
+                    // Block the open — limit reached
+                    sendResponse({
+                        success: false,
+                        limitReached: true,
+                        error: `Auto Open limit reached (${FREE_LIMIT}/month on Free Plan). Upgrade to Premium for unlimited opens.`
+                    });
+                    return;
+                }
+
+                // Open the tab and increment counter
+                chrome.tabs.create({ url: request.url });
+                chrome.storage.local.set({
+                    dakboxAutoOpenCount: count + 1,
+                    dakboxAutoOpenMonthKey: currentMonthKey
+                });
+                sendResponse({ success: true, count: count + 1 });
+            });
+            return true; // async response
         }
 
         // --- Element Picker Logic ---

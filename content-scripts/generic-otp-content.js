@@ -93,21 +93,34 @@
         });
 
         // Auto-open inbox tab based on user settings
-        chrome.storage.local.get(['dakboxAutoOpenInbox', 'dakboxAutoOpenYopmail'], (settings) => {
+        chrome.storage.local.get(['dakboxAutoOpenInbox', 'dakboxAutoOpenYopmail', 'dakboxApiToken'], (settings) => {
+            // Require API token for any auto-open feature functionality
+            if (!settings.dakboxApiToken) {
+                console.log("[DakBox] Auto-open aborted: No valid API token found. Please connect extension first.");
+                return;
+            }
+
             if (isDakboxEmail && settings.dakboxAutoOpenInbox !== false) {
-                // Extract username (part before @)
                 const username = email.split('@')[0];
-                chrome.runtime.sendMessage({
-                    action: 'openTab',
-                    url: `https://dakbox.net/go/${username}`
-                });
+                chrome.runtime.sendMessage(
+                    { action: 'openTab', url: `https://dakbox.net/go/${username}` },
+                    (response) => {
+                        if (response && response.limitReached) {
+                            alert(`⚠️ DakBox — Auto Open Limit Reached\n\n${response.error}`);
+                        }
+                    }
+                );
                 console.log(`[DakBox] Auto-opening DakBox inbox for: ${username}`);
             } else if (isYopmailEmail && settings.dakboxAutoOpenYopmail !== false) {
                 const username = email.split('@')[0];
-                chrome.runtime.sendMessage({
-                    action: 'openTab',
-                    url: `https://yopmail.com/${username}`
-                });
+                chrome.runtime.sendMessage(
+                    { action: 'openTab', url: `https://yopmail.com/${username}` },
+                    (response) => {
+                        if (response && response.limitReached) {
+                            alert(`⚠️ DakBox — Auto Open Limit Reached\n\n${response.error}`);
+                        }
+                    }
+                );
                 console.log(`[DakBox] Auto-opening Yopmail inbox for: ${username}`);
             }
         });
