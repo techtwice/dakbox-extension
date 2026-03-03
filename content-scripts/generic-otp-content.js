@@ -67,8 +67,14 @@
 
         const email = emailInput.value.trim().toLowerCase();
 
-        // We only care about DakBox (and optionally Yopmail if supported later)
-        if (!email.endsWith('@dakbox.net') && !email.endsWith('@dakbox.xyz') && !email.endsWith('@dakbox.com')) {
+        const isDakboxEmail = (
+            email.endsWith('@dakbox.net') ||
+            email.endsWith('@dakbox.xyz') ||
+            email.endsWith('@dakbox.com')
+        );
+        const isYopmailEmail = email.endsWith('@yopmail.com');
+
+        if (!isDakboxEmail && !isYopmailEmail) {
             return;
         }
 
@@ -86,7 +92,30 @@
             }
         });
 
-        startOtpPolling(email);
+        // Auto-open inbox tab based on user settings
+        chrome.storage.local.get(['dakboxAutoOpenInbox', 'dakboxAutoOpenYopmail'], (settings) => {
+            if (isDakboxEmail && settings.dakboxAutoOpenInbox !== false) {
+                // Extract username (part before @)
+                const username = email.split('@')[0];
+                chrome.runtime.sendMessage({
+                    action: 'openTab',
+                    url: `https://dakbox.net/go/${username}`
+                });
+                console.log(`[DakBox] Auto-opening DakBox inbox for: ${username}`);
+            } else if (isYopmailEmail && settings.dakboxAutoOpenYopmail !== false) {
+                const username = email.split('@')[0];
+                chrome.runtime.sendMessage({
+                    action: 'openTab',
+                    url: `https://yopmail.com/${username}`
+                });
+                console.log(`[DakBox] Auto-opening Yopmail inbox for: ${username}`);
+            }
+        });
+
+        // Only DakBox emails are supported for OTP fetching
+        if (isDakboxEmail) {
+            startOtpPolling(email);
+        }
     }
 
     function checkAlreadyWaitingForOtp() {

@@ -51,6 +51,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true;
         }
 
+        // Open a new tab (used for auto-opening DakBox/Yopmail inboxes from content scripts)
+        if (request.action === 'openTab') {
+            if (request.url) {
+                chrome.tabs.create({ url: request.url });
+            }
+            sendResponse({ success: true });
+            return;
+        }
+
         // --- Element Picker Logic ---
         if (request.action === 'armDakboxPicker') {
             const targetField = request.target;
