@@ -57,6 +57,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 sendResponse({ success: false, error: 'No URL provided' });
                 return;
             }
+            // Security: only allow trusted domains to prevent content scripts
+            // from opening arbitrary URLs
+            const ALLOWED_URL_PREFIXES = [
+                'https://dakbox.net/',
+                'https://yopmail.com/'
+            ];
+            const urlAllowed = ALLOWED_URL_PREFIXES.some(prefix => request.url.startsWith(prefix));
+            if (!urlAllowed) {
+                console.warn('[DakBox BG] openTab blocked — untrusted URL:', request.url);
+                sendResponse({ success: false, error: 'URL not allowed' });
+                return;
+            }
 
             chrome.storage.local.get(['dakboxApiToken'], (data) => {
                 const token = data.dakboxApiToken;
@@ -173,8 +185,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Handle get settings request
         if (request.action === 'getSettings') {
             chrome.storage.local.get([
-                'dakboxAutoOtpEnabled',
+                'dakboxAutoOtpEnabledSvp',
                 'dakboxAutoOpenInbox',
+                'dakboxAutoOpenYopmail',
                 'dakboxLastUsername',
                 'dakboxApiToken'
             ], (data) => {
@@ -183,9 +196,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true;
         }
 
-        // Handle save settings request
+        // Handle save settings request — only allow whitelisted keys
         if (request.action === 'saveSettings') {
-            chrome.storage.local.set(request.settings, () => {
+            const ALLOWED_SETTINGS_KEYS = [
+                'dakboxAutoOtpEnabledSvp',
+                'dakboxAutoOpenInbox',
+                'dakboxAutoOpenYopmail',
+                'dakboxAutoGenerate',
+                'dakboxLastUsername',
+                'dakboxOtpSiteConfig',
+                'dakboxSiteConfig'
+            ];
+            const safeSettings = {};
+            let hasInvalidKey = false;
+            for (const key of Object.keys(request.settings || {})) {
+                if (ALLOWED_SETTINGS_KEYS.includes(key)) {
+                    safeSettings[key] = request.settings[key];
+                } else {
+                    console.warn('[DakBox BG] saveSettings: blocked disallowed key:', key);
+                    hasInvalidKey = true;
+                }
+            }
+            if (Object.keys(safeSettings).length === 0) {
+                sendResponse({ success: false, error: hasInvalidKey ? 'Disallowed settings key' : 'No settings provided' });
+                return true;
+            }
+            chrome.storage.local.set(safeSettings, () => {
                 if (chrome.runtime.lastError) {
                     sendResponse({ success: false, error: chrome.runtime.lastError.message });
                 } else {

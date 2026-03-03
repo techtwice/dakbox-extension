@@ -114,7 +114,7 @@
             } else if (isYopmailEmail && settings.dakboxAutoOpenYopmail === true) {
                 const username = email.split('@')[0];
                 chrome.runtime.sendMessage(
-                    { action: 'openTab', url: `https://yopmail.com/${username}` },
+                    { action: 'openTab', url: `https://yopmail.com/?${username}` },
                     (response) => {
                         if (response && response.limitReached) {
                             alert(`⚠️ DakBox — Auto Open Limit Reached\n\n${response.error}`);
@@ -206,7 +206,7 @@
         }
 
         if (otpCode) {
-            console.log(`[DakBox] OTP Found: ${otpCode}`);
+            console.log('[DakBox] OTP fetched successfully.');
 
             // Try to find the target input box
             const otpInputs = document.querySelectorAll(otpConfig.otpSelector);

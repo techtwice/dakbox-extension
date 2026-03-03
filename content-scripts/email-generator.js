@@ -16,11 +16,8 @@
 
     // Use this to specify exact selectors for specific websites.
     // Format: "hostname": "css-selector"
-    const SITE_CONFIG = {
-        "example.com": "#user_email",
-        "anothersite.org": "input[name='email']",
-        "complexsite.net": ".login-form .email-field"
-    };
+    // NOTE: leave empty — user-defined configs are loaded from storage (dakboxSiteConfig)
+    const SITE_CONFIG = {};
 
     // format in storage: dakboxSiteConfig key holding object identical to above.
     let ACTIVE_SITE_CONFIG = { ...SITE_CONFIG };
