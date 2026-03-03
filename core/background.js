@@ -507,13 +507,12 @@ chrome.runtime.onInstalled.addListener((details) => {
     if (details.reason === 'install') {
         console.log('[DakBox] Extension installed, setting defaults...');
         chrome.storage.local.set({
-            dakboxAutoOtpEnabled: true,
+            dakboxAutoOtpEnabledSvp: true,
             dakboxAutoOpenInbox: false,
             dakboxAutoOpenYopmail: true,
             dakboxAutoGenerate: true,
             dakboxLastUsername: '',
             dakboxApiToken: ''
-        });
         });
     }
 });

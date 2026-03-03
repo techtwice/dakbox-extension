@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.storage.local.get({
         'dakboxApiToken': '',
         'dakboxUserInfo': null,
-        'dakboxAutoOtpEnabled': true,
+        'dakboxAutoOtpEnabledSvp': true,
         'dakboxAutoOpenInbox': false,
         'dakboxAutoOpenYopmail': true,
         'dakboxAutoGenerate': true,
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'dakboxAutoOpenCount': 0,
         'dakboxAutoOpenMonthKey': ''
     }, (data) => {
-        toggleAutoOtp.checked = data.dakboxAutoOtpEnabled === true;
+        toggleAutoOtp.checked = data.dakboxAutoOtpEnabledSvp === true;
         toggleAutoOpen.checked = data.dakboxAutoOpenInbox === true;
         toggleAutoYopmail.checked = data.dakboxAutoOpenYopmail === true;
         toggleAutoGenerate.checked = data.dakboxAutoGenerate === true;
@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function refreshAutoOpens(userInfo) {
         if (!planAutoOpens || !userInfo?.autoOpens) return;
 
-        const { limit, remaining } = userInfo.autoOpens;
+        const { limit, used, remaining } = userInfo.autoOpens;
         
         // Display "Unlimited" for premium users (limit is a string "Unlimited")
         if (limit === 'Unlimited' || remaining === 'Unlimited') {
@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', () => {
             planAutoOpens.style.color = '';
             planAutoOpens.title = 'Unlimited auto-opens (Premium)';
         } else {
-            planAutoOpens.textContent = `${remaining} / ${limit}`;
+            planAutoOpens.textContent = `${used} / ${limit}`;
             // Red if no remaining, yellow if low
             if (remaining === 0) {
                 planAutoOpens.style.color = '#e94560';
@@ -461,7 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ─────────────────────────────────────────────
 
     toggleAutoOtp.addEventListener('change', () => {
-        chrome.storage.local.set({ dakboxAutoOtpEnabled: toggleAutoOtp.checked });
+        chrome.storage.local.set({ dakboxAutoOtpEnabledSvp: toggleAutoOtp.checked });
         setStatus(`Auto OTP ${toggleAutoOtp.checked ? 'enabled' : 'disabled'}`, 'success');
     });
 

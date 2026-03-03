@@ -35,9 +35,9 @@
     let autoOpenInbox = true;
     let autoOpenYopmail = true;
 
-    chrome.storage.local.get(['dakboxAutoOtpEnabled', 'dakboxAutoOpenInbox', 'dakboxAutoOpenYopmail', 'dakboxOtpSiteConfig'], (data) => {
-        // Assume default true if undefined
-        autoOtpEnabled = data.dakboxAutoOtpEnabled !== false;
+    chrome.storage.local.get(['dakboxAutoOtpEnabledSvp', 'dakboxAutoOpenInbox', 'dakboxAutoOpenYopmail', 'dakboxOtpSiteConfig'], (data) => {
+        // SVP-specific OTP toggle (defaults to true if key not yet set in storage)
+        autoOtpEnabled = data.dakboxAutoOtpEnabledSvp !== false;
 
         // Check if there is a custom site rule that overrides this setting
         const hostname = window.location.hostname;
@@ -52,7 +52,7 @@
         }
 
         autoOpenInbox = data.dakboxAutoOpenInbox === true;
-        autoOpenYopmail = data.dakboxAutoOpenYopmail === true;
+        autoOpenYopmail = data.dakboxAutoOpenYopmail !== false; // defaults to true if not yet set
         log(`[DakBox-SVP] Settings loaded - Auto OTP: ${autoOtpEnabled}, Auto Open: ${autoOpenInbox}, Auto Yopmail: ${autoOpenYopmail}`);
     });
 
@@ -62,8 +62,8 @@
 
         // Handling dakboxOtpSiteConfig changes requires checking global state and logic again,
         // but to keep it simple, we just reload the page or update if we see a change to the global button.
-        if (changes.dakboxAutoOtpEnabled) {
-            autoOtpEnabled = changes.dakboxAutoOtpEnabled.newValue !== false;
+        if (changes.dakboxAutoOtpEnabledSvp) {
+            autoOtpEnabled = changes.dakboxAutoOtpEnabledSvp.newValue === true;
             log(`[DakBox-SVP] Auto OTP setting changed to: ${autoOtpEnabled}`);
 
             // Re-check override
@@ -85,10 +85,9 @@
                 autoOtpEnabled = true;
                 log(`[DakBox-SVP] Auto OTP overridden to TRUE by new Custom Site Config`);
             } else {
-                // We'd have to re-fetch dakboxAutoOtpEnabled to know what it was natively to restore it. 
-                // For simplicity, we just leave it. A page refresh will correctly initialize it.
-                chrome.storage.local.get(['dakboxAutoOtpEnabled'], (nativeData) => {
-                    autoOtpEnabled = nativeData.dakboxAutoOtpEnabled !== false;
+                // Restore to native SVP setting from dakboxAutoOtpEnabledSvp
+                chrome.storage.local.get(['dakboxAutoOtpEnabledSvp'], (nativeData) => {
+                    autoOtpEnabled = nativeData.dakboxAutoOtpEnabledSvp === true;
                     log(`[DakBox-SVP] Custom site config disabled, restored Auto OTP setting to: ${autoOtpEnabled}`);
                 });
             }
