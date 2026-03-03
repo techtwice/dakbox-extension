@@ -433,10 +433,10 @@
             if (!emailMatch) throw new Error(`Invalid dakbox.net email format: ${email}`);
             const username = emailMatch[1];
 
-            log(`[SVP-OTP] Fetching OTP using background polling (max 15 attempts) for ${username}...`);
+            log(`[SVP-OTP] Fetching OTP using background polling (max 2 attempts) for ${username}...`);
 
-            // Fetch OTP from DakBox API (maxRetries 15 inside background.js)
-            const otpResult = await fetchOtpFromDakBox(username, 15);
+            // Fetch OTP from DakBox API (maxRetries 2 inside background.js)
+            const otpResult = await fetchOtpFromDakBox(username, 2);
 
             if (otpResult.success && otpResult.otp) {
                 log(`[SVP-OTP] OTP fetched successfully: ${otpResult.otp}`);
@@ -482,10 +482,10 @@
             if (!emailMatch) throw new Error(`Invalid dakbox.net email format: ${email}`);
             const username = emailMatch[1];
 
-            log(`[SVP-RegOTP] Fetching Registration OTP using background polling (max 15 attempts) for ${username}...`);
+            log(`[SVP-RegOTP] Fetching Registration OTP using background polling (max 2 attempts) for ${username}...`);
 
-            // Fetch OTP directly, passing maxRetries 15 to the background worker
-            const otpResult = await fetchRegistrationOtp(username, 15);
+            // Fetch OTP directly, passing maxRetries 2 to the background worker
+            const otpResult = await fetchRegistrationOtp(username, 2);
 
             if (otpResult.success && otpResult.otp) {
                 log(`[SVP-RegOTP] OTP fetched successfully: ${otpResult.otp}`);

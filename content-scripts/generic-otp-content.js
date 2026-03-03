@@ -113,7 +113,7 @@
                 const messagePayload = {
                     action: 'fetchOtp',
                     username: emailAddress,
-                    maxRetries: 15 // Let background.js handle the polling loop (15 retries * 3s)
+                    maxRetries: 2 // Let background.js handle the polling loop (2 retries * 70s wait per request)
                 };
 
                 // Add the expiry param if configured so the background script/server can handle it
@@ -151,9 +151,9 @@
     async function startOtpPolling(email) {
         if (checkInterval) clearInterval(checkInterval);
 
-        console.log(`[DakBox] Polling started for ${email}. (Max 15 background checks)`);
+        console.log(`[DakBox] Polling started for ${email}. (Max 2 background requests, 70s wait each)`);
 
-        // Always try to fetch the OTP. The background script will retry up to 15 times internally.
+        // Always try to fetch the OTP. The background script will retry up to 2 times internally.
         const otpCode = await fetchRecentDakboxCode(email);
 
         if (otpCode) {
