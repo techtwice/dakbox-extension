@@ -484,6 +484,17 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.tabs.create({ url: 'https://dakbox.net/post/help-us-expand-dakbox-suggest-websites-for-seamless-otp-automation' });
     });
 
+    const otpConfigsBtn = document.getElementById('otp-configs-btn');
+    if (otpConfigsBtn) {
+        otpConfigsBtn.addEventListener('click', () => {
+            if (chrome.runtime.openOptionsPage) {
+                chrome.runtime.openOptionsPage();
+            } else {
+                window.open(chrome.runtime.getURL('ui/options.html'));
+            }
+        });
+    }
+
     if (openOptionsBtn) {
         openOptionsBtn.addEventListener('click', () => {
             if (chrome.runtime.openOptionsPage) {
