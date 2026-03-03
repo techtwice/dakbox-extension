@@ -58,37 +58,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 return;
             }
 
-            chrome.storage.local.get(['dakboxUserInfo', 'dakboxAutoOpenCount', 'dakboxAutoOpenMonthKey'], (data) => {
-                const now = new Date();
-                const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-
-                // Reset count if we're in a new month
-                let count = data.dakboxAutoOpenCount || 0;
-                if (data.dakboxAutoOpenMonthKey !== currentMonthKey) {
-                    count = 0;
-                }
-
-                const userInfo = data.dakboxUserInfo || {};
-                const isPremium = userInfo && userInfo.planStatus === 'active' && !userInfo.planName?.toLowerCase().includes('free');
-                const FREE_LIMIT = 1;
-
-                if (!isPremium && count >= FREE_LIMIT) {
-                    // Block the open — limit reached
-                    sendResponse({
-                        success: false,
-                        limitReached: true,
-                        error: `Auto Open limit reached (${FREE_LIMIT}/month on Free Plan). Upgrade to Premium for unlimited opens.`
-                    });
+            chrome.storage.local.get(['dakboxApiToken'], (data) => {
+                const token = data.dakboxApiToken;
+                if (!token) {
+                    sendResponse({ success: false, error: 'No API token available' });
                     return;
                 }
 
-                // Open the tab and increment counter
-                chrome.tabs.create({ url: request.url });
-                chrome.storage.local.set({
-                    dakboxAutoOpenCount: count + 1,
-                    dakboxAutoOpenMonthKey: currentMonthKey
-                });
-                sendResponse({ success: true, count: count + 1 });
+                // Track auto-open with server
+                fetch('https://dakbox.net/api/auto-opens/track', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    redirect: 'follow'
+                })
+                    .then(response => {
+                        const contentType = response.headers.get('content-type');
+                        if (!contentType || !contentType.includes('application/json')) {
+                            throw new Error('Invalid response format');
+                        }
+                        return response.json().then(data => ({ status: response.status, ok: response.ok, data }));
+                    })
+                    .then(({ status, ok, data }) => {
+                        if (ok && data.success) {
+                            // Success - open the tab
+                            chrome.tabs.create({ url: request.url });
+                            sendResponse({ success: true, message: 'Tab opened', auto_opens: data.auto_opens });
+                        } else {
+                            // API returned error (403 or success: false)
+                            console.warn(`[DakBox] Auto-open request failed (${status}):`, data.error);
+                            sendResponse({
+                                success: false,
+                                limitReached: status === 403 || !data.success,
+                                error: data.error || `HTTP ${status}`,
+                                auto_opens: data.auto_opens
+                            });
+                        }
+                    })
+                    .catch(error => {
+                        console.error('[DakBox] Auto-open tracking error:', error.message);
+                        sendResponse({ success: false, error: 'Failed to track auto-open: ' + error.message });
+                    });
             });
             return true; // async response
         }
@@ -148,7 +161,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             return true;
         }
 
-        // Handle open dakbox tab request
+        // Handle open dakbox tab request (manual opens from UI, not tracked as auto-open)
         if (request.action === 'openDakboxTab') {
             const url = `https://dakbox.net/go/${request.username}`;
             chrome.tabs.create({ url: url }, (tab) => {

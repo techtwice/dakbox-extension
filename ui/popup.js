@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.dakboxApiToken) {
             // Token exists - show connected view
             showConnectedView(data.dakboxUserInfo);
-            refreshAutoOpens(data.dakboxUserInfo, data.dakboxAutoOpenCount, data.dakboxAutoOpenMonthKey);
+            refreshAutoOpens(data.dakboxUserInfo);
             // Refresh user info in background
             verifyToken(data.dakboxApiToken, true);
         } else {
@@ -123,30 +123,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Reads the auto-open counter from storage and renders it in the plan section.
-     * @param {object} userInfo  - stored user info (planStatus used to detect Premium)
-     * @param {number} count     - raw count from storage
-     * @param {string} monthKey  - stored month key (YYYY-MM)
+     * Display auto-opens from server user info
+     * @param {object} userInfo - user info from GET /api/user response
      */
-    function refreshAutoOpens(userInfo, count, monthKey) {
-        if (!planAutoOpens) return;
+    function refreshAutoOpens(userInfo) {
+        if (!planAutoOpens || !userInfo?.autoOpens) return;
 
-        // Reset count if it's a new month
-        const now = new Date();
-        const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const effectiveCount = (monthKey === currentMonthKey) ? (count || 0) : 0;
-
-        const isPremium = userInfo && userInfo.planStatus === 'active' && !userInfo.planName?.toLowerCase().includes('free');
-        const FREE_LIMIT = 1;
-
-        if (isPremium) {
-            planAutoOpens.textContent = `${effectiveCount} / ∞`;
+        const { limit, remaining } = userInfo.autoOpens;
+        
+        // Display "Unlimited" for premium users (limit is a string "Unlimited")
+        if (limit === 'Unlimited' || remaining === 'Unlimited') {
+            planAutoOpens.textContent = '∞ / ∞';
             planAutoOpens.style.color = '';
+            planAutoOpens.title = 'Unlimited auto-opens (Premium)';
         } else {
-            planAutoOpens.textContent = `${effectiveCount} / ${FREE_LIMIT}`;
-            // Red tint when at or near limit
-            planAutoOpens.style.color = effectiveCount >= FREE_LIMIT ? '#e94560'
-                : effectiveCount >= FREE_LIMIT * 0.8 ? '#faad14' : '';
+            planAutoOpens.textContent = `${remaining} / ${limit}`;
+            // Red if no remaining, yellow if low
+            if (remaining === 0) {
+                planAutoOpens.style.color = '#e94560';
+                planAutoOpens.title = 'Auto-opens limit reached. Upgrade for more.';
+            } else if (remaining <= Math.ceil(limit * 0.2)) {
+                planAutoOpens.style.color = '#faad14';
+                planAutoOpens.title = `${remaining} auto-opens remaining`;
+            } else {
+                planAutoOpens.style.color = '';
+                planAutoOpens.title = `${remaining} auto-opens remaining`;
+            }
         }
     }
 
@@ -183,33 +185,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Accept': 'application/json'
-                }
+                },
+                redirect: 'follow'
             });
 
             let data;
             try {
                 data = await response.json();
             } catch (e) {
+                console.error('[DakBox] Failed to parse response:', e);
                 if (!silent) setApiStatus('Failed to parse API response', 'error');
                 return;
             }
 
-            // Handle disabled/invalid API key
-            if (data.error) {
-                console.warn('[DakBox] API error:', data.error);
-                // Clear saved token — force re-entry
-                chrome.storage.local.remove(['dakboxApiToken', 'dakboxUserInfo']);
-                showApiSetupView();
-                setApiStatus(data.error, 'error');
-                return;
-            }
-
+            // Check HTTP status first
             if (!response.ok) {
-                const errMsg = response.status === 401 ? 'Invalid or expired token' : `Error: ${response.status}`;
-                // Clear saved token on auth failure
+                const errMsg = response.status === 401 ? 'Invalid or expired token' : 
+                               response.status === 403 ? 'Access denied' :
+                               `Error: ${response.status}`;
+                console.warn('[DakBox] API response not ok:', response.status, data);
                 chrome.storage.local.remove(['dakboxApiToken', 'dakboxUserInfo']);
                 showApiSetupView();
                 setApiStatus(errMsg, 'error');
+                return;
+            }
+
+            // Handle API error response
+            if (data.error) {
+                console.warn('[DakBox] API error:', data.error);
+                chrome.storage.local.remove(['dakboxApiToken', 'dakboxUserInfo']);
+                showApiSetupView();
+                setApiStatus(data.error, 'error');
                 return;
             }
 
@@ -223,7 +229,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     expiresAt: data.plan?.expires_at || null,
                     otpTotal: data.otp_helper?.total ?? null,
                     otpUsed: data.otp_helper?.used ?? null,
-                    otpRemaining: data.otp_helper?.remaining ?? null
+                    otpRemaining: data.otp_helper?.remaining ?? null,
+                    autoOpens: {
+                        limit: data.auto_opens?.limit ?? 50,
+                        used: data.auto_opens?.used ?? 0,
+                        remaining: data.auto_opens?.remaining ?? 50
+                    }
                 };
 
                 // Save token and user info
@@ -233,18 +244,86 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 showConnectedView(userInfo);
-                // Refresh auto-open counter display
-                chrome.storage.local.get(['dakboxAutoOpenCount', 'dakboxAutoOpenMonthKey'], (c) => {
-                    refreshAutoOpens(userInfo, c.dakboxAutoOpenCount, c.dakboxAutoOpenMonthKey);
-                });
+                // Display auto-opens from server data
+                refreshAutoOpens(userInfo);
                 if (!silent) setApiStatus('Connected successfully!', 'success');
             } else {
+                console.warn('[DakBox] Invalid response - no user data:', data);
                 if (!silent) setApiStatus('Invalid response from API', 'error');
             }
         } catch (error) {
+            console.error('[DakBox] Connection error:', error);
             if (!silent) setApiStatus('Connection failed: ' + error.message, 'error');
         }
     }
+
+    // ─────────────────────────────────────────────
+    // Track Auto-Opens
+    // ─────────────────────────────────────────────
+
+    /**
+     * Track an auto-open with the server
+     * Called by content scripts when they auto-open a tab
+     * @param {function} callback - callback(success, response)
+     */
+    window.trackAutoOpen = async function(callback) {
+        try {
+            const { dakboxApiToken } = await chrome.storage.local.get('dakboxApiToken');
+            if (!dakboxApiToken) {
+                console.warn('[DakBox] No API token for auto-open tracking');
+                if (callback) callback(false, { error: 'No API token' });
+                return;
+            }
+
+            const response = await fetch('https://dakbox.net/api/auto-opens/track', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${dakboxApiToken}`,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                redirect: 'follow'
+            });
+
+            let data;
+            try {
+                data = await response.json();
+            } catch (e) {
+                if (callback) callback(false, { error: 'Failed to parse response' });
+                return;
+            }
+
+            if (response.status === 403) {
+                console.warn('[DakBox] Auto-opens limit reached:', data.error);
+                if (callback) callback(false, data);
+                return;
+            }
+
+            if (response.ok) {
+                console.log('[DakBox] Auto-open tracked:', data);
+                // Update stored user info with latest auto_opens data
+                if (data.auto_opens) {
+                    chrome.storage.local.get('dakboxUserInfo', (result) => {
+                        const userInfo = result.dakboxUserInfo || {};
+                        userInfo.autoOpens = {
+                            limit: data.auto_opens.limit,
+                            used: data.auto_opens.used,
+                            remaining: data.auto_opens.remaining
+                        };
+                        chrome.storage.local.set({ dakboxUserInfo: userInfo });
+                        refreshAutoOpens(userInfo);
+                    });
+                }
+                if (callback) callback(true, data);
+            } else {
+                console.error('[DakBox] Auto-open tracking failed:', response.status, data);
+                if (callback) callback(false, data);
+            }
+        } catch (error) {
+            console.error('[DakBox] Auto-open tracking error:', error.message);
+            if (callback) callback(false, { error: error.message });
+        }
+    };
 
     // ─────────────────────────────────────────────
     // Disconnect

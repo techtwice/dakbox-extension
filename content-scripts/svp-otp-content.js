@@ -378,10 +378,17 @@
             // Mark as opened to prevent duplicate tabs
             window.__svp_dakbox_opened = true;
 
-            // Open in new tab
-            window.open(dakboxUrl, '_blank');
+            // Use messaging to background script for tracking
+            chrome.runtime.sendMessage(
+                { action: 'openTab', url: dakboxUrl },
+                (response) => {
+                    if (response && response.limitReached) {
+                        alert(`⚠️ DakBox — Auto Open Limit Reached\n\n${response.error}`);
+                    }
+                }
+            );
 
-            log("[SVP-Dakbox] Dakbox tab opened successfully");
+            log("[SVP-Dakbox] Dakbox tab open requested (tracked)");
         } catch (err) {
             error("[SVP-Dakbox] Error opening Dakbox tab:", err);
         }
@@ -392,7 +399,7 @@
     // ─────────────────────────────────────────────
 
     /**
-     * Open Yopmail inbox in a new tab
+     * Open Yopmail inbox in a new tab with auto-open tracking
      */
     function openYopmailTab(email) {
         try {
@@ -412,10 +419,17 @@
             // Mark as opened to prevent duplicate tabs
             window.__svp_yopmail_opened = true;
 
-            // Open in new tab
-            window.open(yopmailUrl, '_blank');
+            // Use messaging to background script for tracking
+            chrome.runtime.sendMessage(
+                { action: 'openTab', url: yopmailUrl },
+                (response) => {
+                    if (response && response.limitReached) {
+                        alert(`⚠️ DakBox — Auto Open Limit Reached\n\n${response.error}`);
+                    }
+                }
+            );
 
-            log("[SVP-Yopmail] Yopmail tab opened successfully");
+            log("[SVP-Yopmail] Yopmail tab open requested (tracked)");
         } catch (err) {
             error("[SVP-Yopmail] Error opening Yopmail tab:", err);
         }
