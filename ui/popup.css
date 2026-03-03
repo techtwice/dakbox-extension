@@ -421,6 +421,30 @@ body {
   line-height: 1.5;
 }
 
+.api-instructions {
+  margin-top: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  font-size: 11px;
+  color: #8b949e;
+  line-height: 1.6;
+}
+
+.api-instructions a {
+  color: #4ecca3;
+  text-decoration: none;
+}
+
+.api-instructions a:hover {
+  text-decoration: underline;
+}
+
+.api-instructions strong {
+  color: #c9d1d9;
+}
+
 /* ── Plan Info Section ── */
 .plan-section {
   display: flex;
