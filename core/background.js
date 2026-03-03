@@ -495,9 +495,12 @@ chrome.runtime.onInstalled.addListener((details) => {
         console.log('[DakBox] Extension installed, setting defaults...');
         chrome.storage.local.set({
             dakboxAutoOtpEnabled: true,
-            dakboxAutoOpenInbox: true,
+            dakboxAutoOpenInbox: false,
+            dakboxAutoOpenYopmail: true,
+            dakboxAutoGenerate: true,
             dakboxLastUsername: '',
             dakboxApiToken: ''
+        });
         });
     }
 });

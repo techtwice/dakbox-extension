@@ -49,21 +49,21 @@ document.addEventListener('DOMContentLoaded', () => {
     versionBadge.textContent = `v${manifest.version}`;
 
     // Check if API token is already saved
-    chrome.storage.local.get([
-        'dakboxApiToken',
-        'dakboxUserInfo',
-        'dakboxAutoOtpEnabled',
-        'dakboxAutoOpenInbox',
-        'dakboxAutoOpenYopmail',
-        'dakboxAutoGenerate',
-        'dakboxLastUsername',
-        'dakboxAutoOpenCount',
-        'dakboxAutoOpenMonthKey'
-    ], (data) => {
-        toggleAutoOtp.checked = data.dakboxAutoOtpEnabled !== false;
-        toggleAutoOpen.checked = data.dakboxAutoOpenInbox !== false;
-        toggleAutoYopmail.checked = data.dakboxAutoOpenYopmail !== false;
-        toggleAutoGenerate.checked = data.dakboxAutoGenerate !== false;
+    chrome.storage.local.get({
+        'dakboxApiToken': '',
+        'dakboxUserInfo': null,
+        'dakboxAutoOtpEnabled': true,
+        'dakboxAutoOpenInbox': false,
+        'dakboxAutoOpenYopmail': true,
+        'dakboxAutoGenerate': true,
+        'dakboxLastUsername': '',
+        'dakboxAutoOpenCount': 0,
+        'dakboxAutoOpenMonthKey': ''
+    }, (data) => {
+        toggleAutoOtp.checked = data.dakboxAutoOtpEnabled === true;
+        toggleAutoOpen.checked = data.dakboxAutoOpenInbox === true;
+        toggleAutoYopmail.checked = data.dakboxAutoOpenYopmail === true;
+        toggleAutoGenerate.checked = data.dakboxAutoGenerate === true;
 
         if (data.dakboxLastUsername) {
             usernameInput.value = data.dakboxLastUsername;

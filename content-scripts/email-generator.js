@@ -284,8 +284,8 @@
 
     // Read initial settings
     chrome.storage.local.get(['dakboxAutoGenerate', 'dakboxSiteConfig'], (data) => {
-        if (data.dakboxAutoGenerate !== undefined) {
-            autoGenerateEnabled = data.dakboxAutoGenerate;
+        if (data.dakboxAutoGenerate === true) {
+            autoGenerateEnabled = true;
         }
 
         if (data.dakboxSiteConfig) {
@@ -302,7 +302,7 @@
     chrome.storage.onChanged.addListener((changes, areaName) => {
         if (areaName !== 'local') return;
         if (changes.dakboxAutoGenerate) {
-            autoGenerateEnabled = changes.dakboxAutoGenerate.newValue !== false;
+            autoGenerateEnabled = changes.dakboxAutoGenerate.newValue === true;
 
             if (autoGenerateEnabled) {
                 // Instantly scan when enabled

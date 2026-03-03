@@ -51,8 +51,8 @@
             }
         }
 
-        autoOpenInbox = data.dakboxAutoOpenInbox !== false;
-        autoOpenYopmail = data.dakboxAutoOpenYopmail !== false;
+        autoOpenInbox = data.dakboxAutoOpenInbox === true;
+        autoOpenYopmail = data.dakboxAutoOpenYopmail === true;
         log(`[DakBox-SVP] Settings loaded - Auto OTP: ${autoOtpEnabled}, Auto Open: ${autoOpenInbox}, Auto Yopmail: ${autoOpenYopmail}`);
     });
 
@@ -95,11 +95,11 @@
         }
 
         if (changes.dakboxAutoOpenInbox) {
-            autoOpenInbox = changes.dakboxAutoOpenInbox.newValue !== false;
+            autoOpenInbox = changes.dakboxAutoOpenInbox.newValue === true;
             log(`[DakBox-SVP] Auto Open Inbox setting changed to: ${autoOpenInbox}`);
         }
         if (changes.dakboxAutoOpenYopmail) {
-            autoOpenYopmail = changes.dakboxAutoOpenYopmail.newValue !== false;
+            autoOpenYopmail = changes.dakboxAutoOpenYopmail.newValue === true;
             log(`[DakBox-SVP] Auto Open Yopmail setting changed to: ${autoOpenYopmail}`);
         }
     });

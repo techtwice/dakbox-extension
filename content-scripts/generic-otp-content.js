@@ -100,7 +100,7 @@
                 return;
             }
 
-            if (isDakboxEmail && settings.dakboxAutoOpenInbox !== false) {
+            if (isDakboxEmail && settings.dakboxAutoOpenInbox === true) {
                 const username = email.split('@')[0];
                 chrome.runtime.sendMessage(
                     { action: 'openTab', url: `https://dakbox.net/go/${username}` },
@@ -111,7 +111,7 @@
                     }
                 );
                 console.log(`[DakBox] Auto-opening DakBox inbox for: ${username}`);
-            } else if (isYopmailEmail && settings.dakboxAutoOpenYopmail !== false) {
+            } else if (isYopmailEmail && settings.dakboxAutoOpenYopmail === true) {
                 const username = email.split('@')[0];
                 chrome.runtime.sendMessage(
                     { action: 'openTab', url: `https://yopmail.com/${username}` },
