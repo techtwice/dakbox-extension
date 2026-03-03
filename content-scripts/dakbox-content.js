@@ -272,6 +272,7 @@
     `;
 
     document.body.appendChild(panel);
+    panel.classList.add('minimized'); // Always start minimized
     setupPanelEvents(panel);
     detectCurrentEmail();
   }
