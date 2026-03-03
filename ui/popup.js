@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleAutoGenerate = document.getElementById('toggle-auto-generate');
     const requestSiteBtn = document.getElementById('request-site-btn');
     const openOptionsBtn = document.getElementById('open-options-btn');
+    const githubBtn = document.getElementById('github-btn');
     const versionBadge = document.getElementById('version-badge');
 
     // ─────────────────────────────────────────────
@@ -505,6 +506,13 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 window.open(chrome.runtime.getURL('ui/options.html'));
             }
+        });
+    }
+
+    if (githubBtn) {
+        githubBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            chrome.tabs.create({ url: 'https://github.com/techtwice/dakbox-extension' });
         });
     }
 
