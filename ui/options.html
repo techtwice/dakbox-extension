@@ -325,6 +325,110 @@
             width: 18px;
             height: 18px;
         }
+
+        /* --- Default Server OTP Config Styles --- */
+        .server-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            color: var(--accent-color);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 12px;
+            letter-spacing: 0.03em;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+
+        .locked-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(148, 163, 184, 0.1);
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 500;
+            padding: 3px 8px;
+            border-radius: 12px;
+        }
+
+        .report-btn {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            color: #f87171;
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            text-decoration: none;
+        }
+
+        .report-btn:hover {
+            background: rgba(239, 68, 68, 0.18);
+            border-color: rgba(239, 68, 68, 0.6);
+            color: #fca5a5;
+        }
+
+        .loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 32px;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-state {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            color: #f87171;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .info-banner {
+            background: rgba(59, 130, 246, 0.07);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            border-radius: 8px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            font-size: 13.5px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .info-banner strong {
+            color: var(--accent-color);
+        }
     </style>
 </head>
 
@@ -402,10 +506,14 @@
             No custom site configurations added yet.
         </div>
 
-        <h1 style="margin-top: 60px;">🤖 Auto OTP Helper Site Config</h1>
+        <h1 style="margin-top: 60px;">
+            🤖 Auto OTP Helper Site Config
+            <span class="server-badge">☁ Server Synced</span>
+        </h1>
         <p class="description" style="margin-bottom: 20px;">
-            Add configurations for websites not officially supported by DakBox. Tell DakBox where to find the email,
-            how to detect submission, and where to inject the OTP code.
+            Add configurations for websites not officially supported by DakBox. Your configs are saved to your DakBox
+            account and synced across devices. Tell DakBox where to find the email, how to detect submission, and where
+            to inject the OTP code.
         </p>
 
         <div class="guidelines">
@@ -508,6 +616,16 @@
 
         <div id="otp-status-message"></div>
 
+        <!-- Loading / error for user OTP section -->
+        <div id="otp-server-loading" class="loading-state" style="display:none;">
+            <div class="spinner"></div>
+            <span>Loading your OTP configurations…</span>
+        </div>
+        <div id="otp-server-error" class="error-state" style="display:none;">
+            <span>⚠️ Could not load your OTP configs. Please check your connection or sign in.</span>
+            <button class="primary" id="otp-server-retry-btn" style="margin-left:auto;padding:6px 14px;font-size:13px;">↺ Retry</button>
+        </div>
+
         <table id="otp-config-table">
             <thead>
                 <tr>
@@ -523,6 +641,49 @@
 
         <div id="otp-empty-state" class="empty-state">
             No custom OTP configurations added yet.
+        </div>
+
+        <!-- ═══ DEFAULT SERVER OTP CONFIGS ═══ -->
+        <h1 style="margin-top: 60px;">
+            🌐 Default OTP Site Configs
+            <span class="server-badge">⬇ From DakBox Server</span>
+        </h1>
+
+        <div class="info-banner">
+            These configurations are <strong>provided and maintained by DakBox</strong>. They are fetched directly from
+            the server and cannot be edited or deleted. You can <strong>enable or disable</strong> any entry to control
+            whether DakBox uses it on that site. If a configuration is not working correctly on your end, use the
+            <strong>Report Issue</strong> button to notify the DakBox team.
+        </div>
+
+        <!-- Loading state -->
+        <div id="default-otp-loading" class="loading-state">
+            <div class="spinner"></div>
+            <span>Loading default configs from DakBox server…</span>
+        </div>
+
+        <!-- Error state (hidden by default) -->
+        <div id="default-otp-error" class="error-state" style="display:none;">
+            <span>⚠️ Could not load default site configs. Please check your connection.</span>
+            <button class="primary" id="default-otp-retry-btn" style="margin-left: auto; padding: 6px 14px; font-size: 13px;">↺ Retry</button>
+        </div>
+
+        <!-- Default configs table -->
+        <table id="default-otp-config-table" style="display:none;">
+            <thead>
+                <tr>
+                    <th>Domain</th>
+                    <th>Selectors</th>
+                    <th style="width: 180px; text-align: center;">Actions</th>
+                </tr>
+            </thead>
+            <tbody id="default-otp-config-tbody">
+                <!-- Populated by JS -->
+            </tbody>
+        </table>
+
+        <div id="default-otp-empty-state" class="empty-state" style="display:none;">
+            No default OTP configurations available from the server.
         </div>
     </div>
 
