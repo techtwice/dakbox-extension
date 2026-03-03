@@ -4,6 +4,9 @@
  * Uses dakbox.net/api with Bearer token authentication
  */
 
+// Disable all console output in production
+['log', 'warn', 'error'].forEach(m => { console[m] = () => {}; });
+
 // --- Element Picker State ---
 let armedPickerField = null;
 

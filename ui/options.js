@@ -4,6 +4,9 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Disable logging in production
+    ['log', 'warn', 'error'].forEach(m => { console[m] = () => {}; });
+
     const domainInput = document.getElementById('domain-input');
     const selectorInput = document.getElementById('selector-input');
     const saveBtn = document.getElementById('save-btn');

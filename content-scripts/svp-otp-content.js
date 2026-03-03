@@ -22,7 +22,7 @@
     // Logging (matches original ENABLE_LOGGING pattern)
     // ─────────────────────────────────────────────
 
-    const ENABLE_LOGGING = true;
+    const ENABLE_LOGGING = false;
     function log(...args) { if (ENABLE_LOGGING) console.log(...args); }
     function warn(...args) { if (ENABLE_LOGGING) console.warn(...args); }
     function error(...args) { if (ENABLE_LOGGING) console.error(...args); }

@@ -10,6 +10,9 @@
     if (window.__dakbox_generator_loaded) return;
     window.__dakbox_generator_loaded = true;
 
+    // Disable logging in production
+    const console = { log: () => {}, warn: () => {}, error: () => {} };
+
     // ─────────────────────────────────────────────
     // Configuration
     // ─────────────────────────────────────────────

@@ -9,7 +9,8 @@
     if (window.__dakbox_picker_active) return;
     window.__dakbox_picker_active = true;
 
-    console.log("[DakBox Picker] Activating element picker...");
+    // Disable logging in production
+    const console = { log: () => {}, warn: () => {}, error: () => {} };
 
     // Create the overlay container for the UI
     const pickerUi = document.createElement('div');
