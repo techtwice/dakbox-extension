@@ -130,14 +130,13 @@
                     }
 
                     if (response && response.success && response.otp) {
-                        resolve(response.otp);
+                        resolve(response);
                     } else {
-                        // The API didn't find a valid OTP or it was expired
                         // Only log if it's NOT a silent "not found yet" error
                         if (response && response.error && !response.isSilent) {
                             console.log(`[DakBox] OTP fetch check: ${response.error}`);
                         }
-                        resolve(null);
+                        resolve(response || { success: false, error: 'No response' });
                     }
                 });
             });
@@ -154,7 +153,15 @@
         console.log(`[DakBox] Polling started for ${email}. (Max 2 background requests, 70s wait each)`);
 
         // Always try to fetch the OTP. The background script will retry up to 2 times internally.
-        const otpCode = await fetchRecentDakboxCode(email);
+        const result = await fetchRecentDakboxCode(email);
+        const otpCode = result && result.success ? result.otp : null;
+
+        if (result && result.isSubscriptionError) {
+            console.warn(`[DakBox] Subscription error: ${result.error}`);
+            alert(`⚠️ DakBox — Subscription Error\n\n${result.error}`);
+            stopPolling();
+            return;
+        }
 
         if (otpCode) {
             console.log(`[DakBox] OTP Found: ${otpCode}`);

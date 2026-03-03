@@ -281,7 +281,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const remaining = result.remaining_seconds ? ` (${result.remaining_seconds}s left)` : '';
                 setStatus(`OTP fetched successfully!${remaining}`, 'success');
             } else {
-                setStatus(result?.error || 'Failed to fetch OTP', 'error');
+                const errMsg = result?.error || 'Failed to fetch OTP';
+                if (result?.isSubscriptionError) {
+                    alert(`⚠️ DakBox — Subscription Error\n\n${errMsg}`);
+                }
+                setStatus(errMsg, 'error');
             }
         } catch (error) {
             setStatus('Error: ' + error.message, 'error');
@@ -322,7 +326,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const remaining = result.remaining_seconds ? ` (${result.remaining_seconds}s left)` : '';
                 setStatus(`Registration OTP fetched!${remaining}`, 'success');
             } else {
-                setStatus(result?.error || 'Failed to fetch OTP', 'error');
+                const errMsg = result?.error || 'Failed to fetch OTP';
+                if (result?.isSubscriptionError) {
+                    alert(`⚠️ DakBox — Subscription Error\n\n${errMsg}`);
+                }
+                setStatus(errMsg, 'error');
             }
         } catch (error) {
             setStatus('Error: ' + error.message, 'error');

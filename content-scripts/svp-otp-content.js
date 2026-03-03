@@ -450,6 +450,10 @@
                     warn("[SVP-OTP] Failed to fill OTP. Stopping for this page load.");
                     window.__svp_otp_filled = true;
                 }
+            } else if (otpResult.isSubscriptionError) {
+                warn(`[SVP-OTP] Subscription error: ${otpResult.error}`);
+                alert(`⚠️ DakBox — Subscription Error\n\n${otpResult.error}`);
+                window.__svp_otp_filled = true;
             } else if (otpResult.expired) {
                 log("[SVP-OTP] OTP is already expired on server.");
                 window.__svp_otp_filled = true;
@@ -496,6 +500,10 @@
                 } else {
                     window.__svp_reg_otp_filled = true;
                 }
+            } else if (otpResult.isSubscriptionError) {
+                warn(`[SVP-RegOTP] Subscription error: ${otpResult.error}`);
+                alert(`⚠️ DakBox — Subscription Error\n\n${otpResult.error}`);
+                window.__svp_reg_otp_filled = true;
             } else {
                 warn("[SVP-RegOTP] Background polling reached max attempts or failed to find OTP. Stopping for this page load.");
                 window.__svp_reg_otp_filled = true; // Stop observer

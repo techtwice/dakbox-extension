@@ -211,6 +211,13 @@ async function fetchOtpFromDakBox(username, maxRetries = 2, expirySeconds = null
                 return { success: false, error: 'API token invalid or expired. Please reconnect.' };
             }
 
+            // Handle 403 Forbidden — subscription / quota errors
+            if (response.status === 403) {
+                const msg = data?.message || 'Access denied (403). Please check your subscription.';
+                console.warn('[DakBox] 403 Forbidden:', msg);
+                return { success: false, error: msg, isSubscriptionError: true };
+            }
+
             // Handle 410 Gone - OTP expired but might still have the code
             if (response.status === 410) {
                 console.warn('[DakBox] OTP expired (410 Gone)');
@@ -358,6 +365,13 @@ async function fetchRegistrationOtp(username, maxRetries = 2, website = '') {
             // Handle 401 Unauthorized
             if (response.status === 401) {
                 return { success: false, error: 'API token invalid or expired. Please reconnect.' };
+            }
+
+            // Handle 403 Forbidden — subscription / quota errors
+            if (response.status === 403) {
+                const msg = data?.message || 'Access denied (403). Please check your subscription.';
+                console.warn('[DakBox] 403 Forbidden (registration):', msg);
+                return { success: false, error: msg, isSubscriptionError: true };
             }
 
             // Handle 410 Gone - OTP expired but might still have the code
