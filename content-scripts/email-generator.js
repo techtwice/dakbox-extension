@@ -10,6 +10,11 @@
     if (window.__dakbox_generator_loaded) return;
     window.__dakbox_generator_loaded = true;
 
+    // Skip on dakbox.net (no need to generate emails there)
+    if (window.location.hostname === 'dakbox.net' || window.location.hostname === 'www.dakbox.net') {
+        return;
+    }
+
     // Disable logging in production
     const console = { log: () => {}, warn: () => {}, error: () => {} };
 

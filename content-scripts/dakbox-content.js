@@ -301,9 +301,9 @@
     document.body.appendChild(panel);
     panel.classList.add('minimized'); // Always start minimized
 
-    // Check if user has dismissed the panel
-    chrome.storage.local.get({ dakboxHelperVisible: true }, (data) => {
-      if (data.dakboxHelperVisible === false) {
+    // Check if user has enabled the panel
+    chrome.storage.local.get({ dakboxHelperVisible: false }, (data) => {
+      if (data.dakboxHelperVisible !== true) {
         panel.style.display = 'none';
       }
     });

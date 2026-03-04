@@ -61,7 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'dakboxAutoOpenInbox': false,
         'dakboxAutoOpenYopmail': true,
         'dakboxAutoGenerate': true,
-        'dakboxHelperVisible': true,
+        'dakboxHelperVisible': false,
         'dakboxLastUsername': '',
         'dakboxAutoOpenCount': 0,
         'dakboxAutoOpenMonthKey': ''
