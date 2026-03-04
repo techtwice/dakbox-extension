@@ -69,7 +69,7 @@
         #dakbox-ext-panel {
           position: fixed;
           bottom: 20px;
-          right: 20px;
+          right: 200px;
           width: 320px;
           background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
           border: 1px solid rgba(255, 255, 255, 0.1);
@@ -129,6 +129,30 @@
         #dakbox-ext-panel .ext-close:hover {
           background: rgba(233, 69, 96, 0.3);
           color: #e94560;
+        }
+        #dakbox-ext-panel .ext-close-panel {
+          cursor: pointer;
+          background: rgba(255, 255, 255, 0.1);
+          border: none;
+          color: #888;
+          font-size: 16px;
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+          margin-left: 4px;
+        }
+        #dakbox-ext-panel .ext-close-panel:hover {
+          background: rgba(233, 69, 96, 0.3);
+          color: #e94560;
+        }
+        #dakbox-ext-panel .ext-header-btns {
+          display: flex;
+          align-items: center;
+          gap: 4px;
         }
         #dakbox-ext-panel .ext-email-display {
           background: rgba(255, 255, 255, 0.08);
@@ -250,9 +274,12 @@
         <div class="ext-title">
           <span class="icon">📬</span>
           DakBox Helper
-          <span class="ext-badge">EXT</span>
+          <span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>
         </div>
-        <button class="ext-close" id="dakbox-ext-close" title="Minimize">─</button>
+        <div class="ext-header-btns">
+          <button class="ext-close" id="dakbox-ext-close" title="Minimize">─</button>
+          <button class="ext-close-panel" id="dakbox-ext-dismiss" title="Close">✕</button>
+        </div>
       </div>
       <div class="ext-body">
         <div class="ext-email-display">
@@ -273,6 +300,14 @@
 
     document.body.appendChild(panel);
     panel.classList.add('minimized'); // Always start minimized
+
+    // Check if user has dismissed the panel
+    chrome.storage.local.get({ dakboxHelperVisible: true }, (data) => {
+      if (data.dakboxHelperVisible === false) {
+        panel.style.display = 'none';
+      }
+    });
+
     setupPanelEvents(panel);
     detectCurrentEmail();
   }
@@ -287,6 +322,13 @@
     closeBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       panel.classList.toggle('minimized');
+    });
+
+    // Close (dismiss) panel entirely
+    const dismissBtn = panel.querySelector('#dakbox-ext-dismiss');
+    dismissBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      panel.style.display = 'none';
     });
 
     panel.addEventListener('click', () => {
@@ -451,6 +493,21 @@
   // ─────────────────────────────────────────────
   // Initialize
   // ─────────────────────────────────────────────
+
+  // Listen for toggle messages from popup
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.action === 'setDakboxHelperVisible') {
+      const panel = document.getElementById('dakbox-ext-panel');
+      if (!panel) return;
+      if (message.visible) {
+        panel.style.display = '';
+        chrome.storage.local.set({ dakboxHelperVisible: true });
+      } else {
+        panel.style.display = 'none';
+        chrome.storage.local.set({ dakboxHelperVisible: false });
+      }
+    }
+  });
 
   function init() {
     // Wait for page to be ready

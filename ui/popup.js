@@ -40,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleAutoOpen = document.getElementById('toggle-auto-open');
     const toggleAutoYopmail = document.getElementById('toggle-auto-yopmail');
     const toggleAutoGenerate = document.getElementById('toggle-auto-generate');
+    const toggleDakboxHelper = document.getElementById('toggle-dakbox-helper');
     const requestSiteBtn = document.getElementById('request-site-btn');
     const openOptionsBtn = document.getElementById('open-options-btn');
     const githubBtn = document.getElementById('github-btn');
@@ -60,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'dakboxAutoOpenInbox': false,
         'dakboxAutoOpenYopmail': true,
         'dakboxAutoGenerate': true,
+        'dakboxHelperVisible': true,
         'dakboxLastUsername': '',
         'dakboxAutoOpenCount': 0,
         'dakboxAutoOpenMonthKey': ''
@@ -68,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleAutoOpen.checked = data.dakboxAutoOpenInbox === true;
         toggleAutoYopmail.checked = data.dakboxAutoOpenYopmail === true;
         toggleAutoGenerate.checked = data.dakboxAutoGenerate === true;
+        toggleDakboxHelper.checked = data.dakboxHelperVisible !== false;
 
         if (data.dakboxLastUsername) {
             usernameInput.value = data.dakboxLastUsername;
@@ -482,6 +485,20 @@ document.addEventListener('DOMContentLoaded', () => {
     toggleAutoGenerate.addEventListener('change', () => {
         chrome.storage.local.set({ dakboxAutoGenerate: toggleAutoGenerate.checked });
         setStatus(`Auto Random Email ${toggleAutoGenerate.checked ? 'enabled' : 'disabled'}`, 'success');
+    });
+
+    toggleDakboxHelper.addEventListener('change', () => {
+        const visible = toggleDakboxHelper.checked;
+        chrome.storage.local.set({ dakboxHelperVisible: visible });
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    action: 'setDakboxHelperVisible',
+                    visible: visible
+                });
+            }
+        });
+        setStatus(`DakBox Helper Panel ${visible ? 'shown' : 'hidden'}`, 'success');
     });
 
     requestSiteBtn.addEventListener('click', () => {
