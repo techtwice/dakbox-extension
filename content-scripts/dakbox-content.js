@@ -11,9 +11,6 @@
   if (window.__dakbox_extension_loaded) return;
   window.__dakbox_extension_loaded = true;
 
-  // Disable logging in production
-  const console = { log: () => {}, warn: () => {}, error: () => {} };
-
   // Don't show on admin pages
   if (window.location.pathname.startsWith('/admin')) {
     console.log('[DakBox Extension] Skipping on admin page');

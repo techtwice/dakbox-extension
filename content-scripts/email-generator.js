@@ -15,9 +15,6 @@
         return;
     }
 
-    // Disable logging in production
-    const console = { log: () => {}, warn: () => {}, error: () => {} };
-
     // ─────────────────────────────────────────────
     // Configuration
     // ─────────────────────────────────────────────

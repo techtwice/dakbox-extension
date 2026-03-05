@@ -9,9 +9,6 @@
     if (window.__dakbox_generic_otp_loaded) return;
     window.__dakbox_generic_otp_loaded = true;
 
-    // Disable logging in production
-    const console = { log: () => {}, warn: () => {}, error: () => {} };
-
     const hostname = window.location.hostname;
     let otpConfig = null;
     let sessionActive = false;

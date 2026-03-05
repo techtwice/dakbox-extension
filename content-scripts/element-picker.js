@@ -9,9 +9,6 @@
     if (window.__dakbox_picker_active) return;
     window.__dakbox_picker_active = true;
 
-    // Disable logging in production
-    const console = { log: () => {}, warn: () => {}, error: () => {} };
-
     // Create the overlay container for the UI
     const pickerUi = document.createElement('div');
     pickerUi.id = 'dakbox-picker-ui';

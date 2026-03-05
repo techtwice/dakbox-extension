@@ -4,9 +4,6 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-    // Disable logging in production
-    ['log', 'warn', 'error'].forEach(m => { console[m] = () => {}; });
-
     // ─────────────────────────────────────────────
     // Element References
     // ─────────────────────────────────────────────
