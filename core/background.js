@@ -4,6 +4,8 @@
  * Uses dakbox.net/api with Bearer token authentication
  */
 
+importScripts('logger.js');
+
 // --- Element Picker State ---
 let armedPickerField = null;
 

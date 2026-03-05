@@ -25,6 +25,7 @@
         "<all_urls>"
       ],
       "js": [
+        "core/logger.js",
         "content-scripts/email-generator.js",
         "content-scripts/generic-otp-content.js"
       ],
@@ -35,6 +36,7 @@
         "https://dakbox.net/*"
       ],
       "js": [
+        "core/logger.js",
         "content-scripts/dakbox-content.js"
       ],
       "run_at": "document_end"
@@ -44,6 +46,7 @@
         "https://svp-international.pacc.sa/*"
       ],
       "js": [
+        "core/logger.js",
         "content-scripts/svp-otp-content.js"
       ],
       "run_at": "document_end"

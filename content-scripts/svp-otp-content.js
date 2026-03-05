@@ -22,10 +22,9 @@
     // Logging (matches original ENABLE_LOGGING pattern)
     // ─────────────────────────────────────────────
 
-    const ENABLE_LOGGING = true;
-    function log(...args) { if (ENABLE_LOGGING) console.log(...args); }
-    function warn(...args) { if (ENABLE_LOGGING) console.warn(...args); }
-    function error(...args) { if (ENABLE_LOGGING) console.error(...args); }
+    function log(...args) { if (DAKBOX_LOGGING) console.log(...args); }
+    function warn(...args) { if (DAKBOX_LOGGING) console.warn(...args); }
+    function error(...args) { if (DAKBOX_LOGGING) console.error(...args); }
 
     // ─────────────────────────────────────────────
     // Settings
