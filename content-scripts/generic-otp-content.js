@@ -10,6 +10,8 @@
     window.__dakbox_generic_otp_loaded = true;
 
     const hostname = window.location.hostname;
+    // Strip leading "www." so configs saved as "notion.so" match "www.notion.so"
+    const configHostname = hostname.replace(/^www\./, '');
     let otpConfig = null;
     let sessionActive = false;
     let targetEmail = null;
@@ -19,13 +21,17 @@
     chrome.storage.local.get(['dakboxOtpSiteConfig'], (data) => {
         if (!data.dakboxOtpSiteConfig) return;
 
-        otpConfig = data.dakboxOtpSiteConfig[hostname];
+        otpConfig = data.dakboxOtpSiteConfig[hostname] || data.dakboxOtpSiteConfig[configHostname];
+        console.log(`[DakBox] Config lookup: hostname="${hostname}", configHostname="${configHostname}", found: ${!!otpConfig}`);
         if (otpConfig) {
             // Handle legacy format (if missing 'enabled', assume true)
             if (otpConfig.enabled === undefined) otpConfig.enabled = true;
 
             if (otpConfig.enabled) {
                 console.log(`[DakBox] Site custom OTP config found and enabled for ${hostname}`, otpConfig);
+                console.log(`[DakBox] Watching for trigger selector: "${otpConfig.triggerSelector}"`);
+                console.log(`[DakBox] Email input selector: "${otpConfig.emailSelector}"`);
+                console.log(`[DakBox] OTP input selector: "${otpConfig.otpSelector}"`);
                 initGenericOtpHelper();
             } else {
                 console.log(`[DakBox] Site custom OTP config found but DISABLED for ${hostname}`);
@@ -35,20 +41,23 @@
 
     function initGenericOtpHelper() {
         // Setup listener for the submit trigger
+        // capture:true fires BEFORE the site's own handlers, so SPAs can't swallow the event
         document.addEventListener('click', (e) => {
             // Check if what they clicked matches (or is inside) the trigger selector
             const target = e.target.closest(otpConfig.triggerSelector);
+            console.log(`[DakBox] Click on <${e.target.tagName.toLowerCase()}${e.target.id ? '#'+e.target.id : ''}${e.target.className ? '.'+[...e.target.classList].join('.') : ''}> → trigger match: ${!!target}`);
             if (target) {
+                console.log(`[DakBox] ✅ Trigger matched! element:`, target);
                 handleTriggerFound();
             }
-        });
+        }, true); // <-- capture phase
 
         // Also handle potential form submit events if the trigger is a form submission
         document.addEventListener('submit', (e) => {
             if (e.target.matches(otpConfig.triggerSelector)) {
                 handleTriggerFound();
             }
-        });
+        }, true); // <-- capture phase
 
         // Check if we are ALREADY on a page looking for the OTP box
         // (e.g. they submitted on page A, and redirected to page B)
@@ -60,12 +69,14 @@
 
         // Try to find the email input
         const emailInput = document.querySelector(otpConfig.emailSelector);
+        console.log(`[DakBox] Looking for email input with selector: "${otpConfig.emailSelector}" → found: ${!!emailInput}`);
         if (!emailInput || !emailInput.value) {
             console.warn("[DakBox] Trigger detected, but could not find associated email input or it was empty.");
             return;
         }
 
         const email = emailInput.value.trim().toLowerCase();
+        console.log(`[DakBox] Email input value: "${email}"`);
 
         const isDakboxEmail = (
             email.endsWith('@dakbox.net') ||
@@ -74,7 +85,10 @@
         );
         const isYopmailEmail = email.endsWith('@yopmail.com');
 
+        console.log(`[DakBox] Email match → isDakbox: ${isDakboxEmail}, isYopmail: ${isYopmailEmail}`);
+
         if (!isDakboxEmail && !isYopmailEmail) {
+            console.warn(`[DakBox] ❌ Email "${email}" is not a DakBox or Yopmail address — ignoring.`);
             return;
         }
 
