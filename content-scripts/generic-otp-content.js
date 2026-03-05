@@ -12,64 +12,83 @@
     const hostname = window.location.hostname;
     // Strip leading "www." so configs saved as "notion.so" match "www.notion.so"
     const configHostname = hostname.replace(/^www\./, '');
-    let otpConfig = null;
+
+    console.log(`[DakBox] generic-otp-content.js loaded on: "${hostname}" (configHostname: "${configHostname}")`);
+
+    let otpConfigs  = []; // all enabled rules for this domain
+    let activeConfig = null; // the rule that matched for the current session
     let sessionActive = false;
     let targetEmail = null;
     let checkInterval = null;
 
     // Load config to see if this site is supported
     chrome.storage.local.get(['dakboxOtpSiteConfig'], (data) => {
-        if (!data.dakboxOtpSiteConfig) return;
+        console.log(`[DakBox] dakboxOtpSiteConfig from storage:`, data.dakboxOtpSiteConfig);
 
-        otpConfig = data.dakboxOtpSiteConfig[hostname] || data.dakboxOtpSiteConfig[configHostname];
-        console.log(`[DakBox] Config lookup: hostname="${hostname}", configHostname="${configHostname}", found: ${!!otpConfig}`);
-        if (otpConfig) {
-            // Handle legacy format (if missing 'enabled', assume true)
-            if (otpConfig.enabled === undefined) otpConfig.enabled = true;
-
-            if (otpConfig.enabled) {
-                console.log(`[DakBox] Site custom OTP config found and enabled for ${hostname}`, otpConfig);
-                console.log(`[DakBox] Watching for trigger selector: "${otpConfig.triggerSelector}"`);
-                console.log(`[DakBox] Email input selector: "${otpConfig.emailSelector}"`);
-                console.log(`[DakBox] OTP input selector: "${otpConfig.otpSelector}"`);
-                initGenericOtpHelper();
-            } else {
-                console.log(`[DakBox] Site custom OTP config found but DISABLED for ${hostname}`);
-            }
+        if (!data.dakboxOtpSiteConfig) {
+            console.warn(`[DakBox] No dakboxOtpSiteConfig in storage. Open the OTP Site Configs page to sync.`);
+            return;
         }
+
+        const raw = data.dakboxOtpSiteConfig[hostname] || data.dakboxOtpSiteConfig[configHostname];
+        console.log(`[DakBox] Config lookup: hostname="${hostname}", configHostname="${configHostname}", found: ${!!raw}`, raw || '(none)');
+
+        if (!raw) return;
+
+        // Normalize: legacy = single object, new format = array
+        const configList = Array.isArray(raw) ? raw : [raw];
+        // Handle legacy objects missing 'enabled'
+        configList.forEach(c => { if (c.enabled === undefined) c.enabled = true; });
+        otpConfigs = configList.filter(c => c.enabled !== false);
+
+        if (otpConfigs.length === 0) {
+            console.log(`[DakBox] Config found for "${hostname}" but all rules are DISABLED.`);
+            return;
+        }
+
+        console.log(`[DakBox] ${otpConfigs.length} active rule(s) found for "${hostname}":`);
+        otpConfigs.forEach((cfg, i) => {
+            console.log(`[DakBox]  Rule #${i + 1}: trigger="${cfg.triggerSelector}" | email="${cfg.emailSelector}" | otp="${cfg.otpSelector}"`);
+        });
+        initGenericOtpHelper();
     });
 
     function initGenericOtpHelper() {
-        // Setup listener for the submit trigger
         // capture:true fires BEFORE the site's own handlers, so SPAs can't swallow the event
         document.addEventListener('click', (e) => {
-            // Check if what they clicked matches (or is inside) the trigger selector
-            const target = e.target.closest(otpConfig.triggerSelector);
-            console.log(`[DakBox] Click on <${e.target.tagName.toLowerCase()}${e.target.id ? '#'+e.target.id : ''}${e.target.className ? '.'+[...e.target.classList].join('.') : ''}> → trigger match: ${!!target}`);
-            if (target) {
-                console.log(`[DakBox] ✅ Trigger matched! element:`, target);
-                handleTriggerFound();
+            const tag = `<${e.target.tagName.toLowerCase()}${e.target.id ? '#'+e.target.id : ''}${e.target.className ? '.'+[...e.target.classList].join('.') : ''}>`;
+            for (const cfg of otpConfigs) {
+                const target = e.target.closest(cfg.triggerSelector);
+                console.log(`[DakBox] Click on ${tag} → rule trigger "${cfg.triggerSelector}": ${!!target}`);
+                if (target) {
+                    console.log(`[DakBox] ✅ Trigger matched rule with email selector "${cfg.emailSelector}"! element:`, target);
+                    handleTriggerFound(cfg);
+                    break; // first matching rule wins
+                }
             }
-        }, true); // <-- capture phase
+        }, true);
 
-        // Also handle potential form submit events if the trigger is a form submission
         document.addEventListener('submit', (e) => {
-            if (e.target.matches(otpConfig.triggerSelector)) {
-                handleTriggerFound();
+            for (const cfg of otpConfigs) {
+                if (e.target.matches(cfg.triggerSelector)) {
+                    handleTriggerFound(cfg);
+                    break;
+                }
             }
-        }, true); // <-- capture phase
+        }, true);
 
         // Check if we are ALREADY on a page looking for the OTP box
         // (e.g. they submitted on page A, and redirected to page B)
         checkAlreadyWaitingForOtp();
     }
 
-    function handleTriggerFound() {
+    function handleTriggerFound(cfg) {
         if (sessionActive) return;
+        activeConfig = cfg;
 
         // Try to find the email input
-        const emailInput = document.querySelector(otpConfig.emailSelector);
-        console.log(`[DakBox] Looking for email input with selector: "${otpConfig.emailSelector}" → found: ${!!emailInput}`);
+        const emailInput = document.querySelector(cfg.emailSelector);
+        console.log(`[DakBox] Looking for email input with selector: "${cfg.emailSelector}" → found: ${!!emailInput}`);
         if (!emailInput || !emailInput.value) {
             console.warn("[DakBox] Trigger detected, but could not find associated email input or it was empty.");
             return;
@@ -141,7 +160,7 @@
 
         // Only DakBox emails are supported for OTP fetching
         if (isDakboxEmail) {
-            startOtpPolling(email);
+            startOtpPolling(email, cfg);
         }
     }
 
@@ -153,7 +172,9 @@
                     console.log(`[DakBox] Resuming previous OTP session for ${data.dakboxOtpSession.email}`);
                     sessionActive = true;
                     targetEmail = data.dakboxOtpSession.email;
-                    startOtpPolling(targetEmail);
+                    // Use first available rule as fallback when resuming after redirect
+                    activeConfig = otpConfigs[0];
+                    startOtpPolling(targetEmail, activeConfig);
                 } else {
                     // Clean up stale session
                     chrome.storage.local.remove('dakboxOtpSession');
@@ -163,7 +184,7 @@
     }
 
     // Reuse the logic originally built for svp to fetch the OTP via background script
-    async function fetchRecentDakboxCode(emailAddress) {
+    async function fetchRecentDakboxCode(emailAddress, cfg) {
         try {
             return new Promise((resolve) => {
                 const messagePayload = {
@@ -173,8 +194,8 @@
                 };
 
                 // Add the expiry param if configured so the background script/server can handle it
-                if (otpConfig.expiry) {
-                    messagePayload.expiry = otpConfig.expiry;
+                if (cfg && cfg.expiry) {
+                    messagePayload.expiry = cfg.expiry;
                 }
 
                 chrome.runtime.sendMessage(messagePayload, (response) => {
@@ -203,13 +224,13 @@
         }
     }
 
-    async function startOtpPolling(email) {
+    async function startOtpPolling(email, cfg) {
         if (checkInterval) clearInterval(checkInterval);
 
-        console.log(`[DakBox] Polling started for ${email}. (Max 2 background requests, 70s wait each)`);
+        console.log(`[DakBox] Polling started for ${email} using rule: trigger="${cfg.triggerSelector}" | otp="${cfg.otpSelector}"`);
 
         // Always try to fetch the OTP. The background script will retry up to 2 times internally.
-        const result = await fetchRecentDakboxCode(email);
+        const result = await fetchRecentDakboxCode(email, cfg);
         const otpCode = result && result.success ? result.otp : null;
 
         if (result && result.isSubscriptionError) {
@@ -223,18 +244,18 @@
             console.log('[DakBox] OTP fetched successfully.');
 
             // Try to find the target input box
-            const otpInputs = document.querySelectorAll(otpConfig.otpSelector);
+            const otpInputs = document.querySelectorAll(cfg.otpSelector);
 
             if (otpInputs.length > 0) {
-                autoFillOtp(otpCode, otpInputs, otpConfig);
+                autoFillOtp(otpCode, otpInputs, cfg);
                 stopPolling();
             } else {
                 console.log("[DakBox] OTP found, but input fields not found. Waiting for UI...");
                 // Start a short interval just to wait for the UI
                 checkInterval = setInterval(() => {
-                    const latestInputs = document.querySelectorAll(otpConfig.otpSelector);
+                    const latestInputs = document.querySelectorAll(cfg.otpSelector);
                     if (latestInputs.length > 0) {
-                        autoFillOtp(otpCode, latestInputs, otpConfig);
+                        autoFillOtp(otpCode, latestInputs, cfg);
                         stopPolling();
                     }
                 }, 1000);

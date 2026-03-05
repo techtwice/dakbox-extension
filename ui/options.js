@@ -645,48 +645,58 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Sync server configs → chrome.storage.local for content script ──
     // generic-otp-content.js reads dakboxOtpSiteConfig[hostname] on every page load.
     // It expects camelCase keys and an 'enabled' boolean.
+    // Value is an ARRAY so multiple rules for the same domain all fire.
     // Admin configs use the user's local toggle state; user configs use is_active.
-    // User-type configs ALWAYS take precedence over admin configs for the same domain.
+    // If a domain has enabled user configs they REPLACE admin configs for that domain.
+    // If all user configs for a domain are disabled, the admin config is kept as fallback.
     function syncConfigsToContentScript() {
-        const map = {};
-        const overriddenDomains = [];
+        const map = {}; // domain → array of config objects
 
-        // 1. Seed admin configs that are enabled by user's local preference
+        // 1. Seed admin configs (one per domain from server)
         adminOtpConfigs.forEach(config => {
             const domain    = config.website_domain;
             const isEnabled = adminOtpToggleStates[domain]?.enabled ?? config.is_active;
-            map[domain] = {
+            if (!map[domain]) map[domain] = [];
+            map[domain].push({
                 emailSelector:     config.email_selector,
                 triggerSelector:   config.trigger_selector,
                 otpSelector:       config.otp_box_selector,
                 otpSubmitSelector: config.otp_submit_selector || undefined,
                 expiry:            config.expiry_seconds      || undefined,
                 enabled:           isEnabled
-            };
+            });
         });
 
-        // 2. User configs ALWAYS override admin configs for the same domain
+        // 2. Group user configs by domain
+        const userByDomain = {};
         userOtpConfigs.forEach(config => {
-            const domain = config.website_domain;
-            if (map[domain]) {
-                overriddenDomains.push(domain);
+            const d = config.website_domain;
+            if (!userByDomain[d]) userByDomain[d] = [];
+            userByDomain[d].push(config);
+        });
+
+        // 3. For each domain that has user configs:
+        //    - If any are enabled → replace admin config(s) entirely with the enabled user ones
+        //    - If ALL are disabled → leave admin config as fallback (don't kill the domain)
+        Object.entries(userByDomain).forEach(([domain, configs]) => {
+            const enabledUserConfigs = configs.filter(c => c.is_active === true);
+            if (enabledUserConfigs.length > 0) {
+                map[domain] = enabledUserConfigs.map(config => ({
+                    emailSelector:     config.email_selector,
+                    triggerSelector:   config.trigger_selector,
+                    otpSelector:       config.otp_box_selector,
+                    otpSubmitSelector: config.otp_submit_selector || undefined,
+                    expiry:            config.expiry_seconds      || undefined,
+                    enabled:           true
+                }));
+            } else {
+                console.log(`[DakBox] All user configs for "${domain}" are disabled — keeping admin config.`);
             }
-            map[domain] = {
-                emailSelector:     config.email_selector,
-                triggerSelector:   config.trigger_selector,
-                otpSelector:       config.otp_box_selector,
-                otpSubmitSelector: config.otp_submit_selector || undefined,
-                expiry:            config.expiry_seconds      || undefined,
-                enabled:           config.is_active === true
-            };
         });
 
         chrome.storage.local.set({ dakboxOtpSiteConfig: map }, () => {
-            let msg = `[DakBox] Synced ${Object.keys(map).length} OTP config(s)`;
-            if (overriddenDomains.length > 0) {
-                msg += ` (user config overriding admin for: ${overriddenDomains.join(', ')})`;
-            }
-            console.log(msg);
+            const total = Object.values(map).reduce((sum, arr) => sum + arr.length, 0);
+            console.log(`[DakBox] Synced ${total} OTP rule(s) across ${Object.keys(map).length} domain(s)`);
         });
     }
 
