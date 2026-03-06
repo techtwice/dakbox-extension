@@ -560,7 +560,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (updateBtn) {
         updateBtn.addEventListener('click', () => {
             const svg = updateBtn.querySelector('svg');
-            // Spin the icon while checking
             svg.style.transition = 'transform 0.6s linear';
             svg.style.transform = 'rotate(360deg)';
             setTimeout(() => { svg.style.transform = ''; }, 700);
@@ -571,9 +570,8 @@ document.addEventListener('DOMContentLoaded', () => {
             chrome.runtime.requestUpdateCheck((status) => {
                 updateBtn.disabled = false;
                 if (status === 'update_available') {
-                    updateBtn.title = 'Update available — reloading...';
+                    updateBtn.title = 'Updating...';
                     updateBtn.style.color = '#4caf7d';
-                    // Reload the extension to apply the update
                     setTimeout(() => chrome.runtime.reload(), 1200);
                 } else if (status === 'no_update') {
                     updateBtn.title = 'Already up to date!';
@@ -583,10 +581,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         updateBtn.style.color = '';
                     }, 3000);
                 } else {
-                    // 'throttled' — Chrome rate-limits this call
-                    updateBtn.title = 'Try again in a few minutes';
+                    // 'throttled' — Chrome just auto-checked recently, already up to date
+                    updateBtn.title = 'Already up to date!';
+                    updateBtn.style.color = '#4caf7d';
                     setTimeout(() => {
                         updateBtn.title = 'Check for updates';
+                        updateBtn.style.color = '';
                     }, 3000);
                 }
             });

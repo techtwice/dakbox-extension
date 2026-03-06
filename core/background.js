@@ -6,6 +6,27 @@
 
 importScripts('logger.js');
 
+// --- Auto-update (production only) ---
+// Only runs when installed from the Chrome Web Store (update_url present).
+// Checks every 4 hours; reloads immediately if an update is available.
+if (chrome.runtime.getManifest().update_url) {
+    const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+    function checkForUpdate() {
+        chrome.runtime.requestUpdateCheck((status) => {
+            console.log(`[DakBox] Update check: ${status}`);
+            if (status === 'update_available') {
+                console.log('[DakBox] New version available — reloading to apply update.');
+                chrome.runtime.reload();
+            }
+        });
+    }
+
+    // Check once on startup, then periodically
+    checkForUpdate();
+    setInterval(checkForUpdate, CHECK_INTERVAL_MS);
+}
+
 // --- Element Picker State ---
 let armedPickerField = null;
 
