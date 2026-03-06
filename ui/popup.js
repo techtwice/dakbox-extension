@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const requestSiteBtn = document.getElementById('request-site-btn');
     const openOptionsBtn = document.getElementById('open-options-btn');
     const githubBtn = document.getElementById('github-btn');
+    const updateBtn = document.getElementById('update-btn');
     const versionBadge = document.getElementById('version-badge');
 
     // ─────────────────────────────────────────────
@@ -49,6 +50,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const manifest = chrome.runtime.getManifest();
     versionBadge.textContent = `v${manifest.version}`;
+
+    // Hide the update button in dev mode — requestUpdateCheck only works on Web Store installs
+    const isFromStore = !!(manifest.update_url);
+    if (updateBtn && !isFromStore) updateBtn.style.display = 'none';
 
     // Check if API token is already saved
     chrome.storage.local.get({
@@ -527,6 +532,42 @@ document.addEventListener('DOMContentLoaded', () => {
         githubBtn.addEventListener('click', (e) => {
             e.preventDefault();
             chrome.tabs.create({ url: 'https://github.com/techtwice/dakbox-extension' });
+        });
+    }
+
+    if (updateBtn) {
+        updateBtn.addEventListener('click', () => {
+            const svg = updateBtn.querySelector('svg');
+            // Spin the icon while checking
+            svg.style.transition = 'transform 0.6s linear';
+            svg.style.transform = 'rotate(360deg)';
+            setTimeout(() => { svg.style.transform = ''; }, 700);
+
+            updateBtn.disabled = true;
+            updateBtn.title = 'Checking...';
+
+            chrome.runtime.requestUpdateCheck((status) => {
+                updateBtn.disabled = false;
+                if (status === 'update_available') {
+                    updateBtn.title = 'Update available — reloading...';
+                    updateBtn.style.color = '#4caf7d';
+                    // Reload the extension to apply the update
+                    setTimeout(() => chrome.runtime.reload(), 1200);
+                } else if (status === 'no_update') {
+                    updateBtn.title = 'Already up to date!';
+                    updateBtn.style.color = '#4caf7d';
+                    setTimeout(() => {
+                        updateBtn.title = 'Check for updates';
+                        updateBtn.style.color = '';
+                    }, 3000);
+                } else {
+                    // 'throttled' — Chrome rate-limits this call
+                    updateBtn.title = 'Try again in a few minutes';
+                    setTimeout(() => {
+                        updateBtn.title = 'Check for updates';
+                    }, 3000);
+                }
+            });
         });
     }
 
