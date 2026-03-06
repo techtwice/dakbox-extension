@@ -53,7 +53,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Hide the update button in dev mode — requestUpdateCheck only works on Web Store installs
     const isFromStore = !!(manifest.update_url);
-    if (updateBtn && !isFromStore) updateBtn.style.display = 'none';
+    if (updateBtn && !isFromStore) {
+        updateBtn.style.display = 'none';
+    } else if (updateBtn && isFromStore) {
+        // Auto-check for updates silently when popup opens
+        chrome.runtime.requestUpdateCheck((status) => {
+            if (status === 'update_available') {
+                // Show a green pulsing dot badge on the button
+                updateBtn.title = 'Update available — click to install!';
+                updateBtn.style.color = '#4caf7d';
+                updateBtn.style.position = 'relative';
+                const dot = document.createElement('span');
+                dot.style.cssText = 'position:absolute;top:4px;right:4px;width:8px;height:8px;background:#4caf7d;border-radius:50%;animation:pulse 1.2s infinite;';
+                updateBtn.appendChild(dot);
+                // Inject the pulse keyframes once
+                if (!document.getElementById('dakbox-pulse-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'dakbox-pulse-style';
+                    style.textContent = '@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.4)}}';
+                    document.head.appendChild(style);
+                }
+            }
+        });
+    }
 
     // Check if API token is already saved
     chrome.storage.local.get({
