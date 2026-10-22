@@ -188,10 +188,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Handle registration OTP fetch request
         if (request.action === 'fetchRegistrationOtp') {
+            const key = 'reg:' + request.username;
             getWebsiteHostname(sender).then(website => {
-                fetchRegistrationOtp(request.username, request.maxRetries || 5, website)
-                    .then(result => sendResponse(result))
-                    .catch(error => sendResponse({ success: false, error: error.message }));
+                if (inFlightOtpRequests.has(key)) {
+                    console.log(`[DakBox] Deduplicating registration fetch for ${request.username} — sharing in-flight request.`);
+                    inFlightOtpRequests.get(key).then(result => sendResponse(result)).catch(() => sendResponse({ success: false, error: 'Fetch failed' }));
+                    return;
+                }
+                const promise = fetchRegistrationOtp(request.username, request.maxRetries || 2, website)
+                    .finally(() => inFlightOtpRequests.delete(key));
+                inFlightOtpRequests.set(key, promise);
+                promise.then(result => sendResponse(result)).catch(error => sendResponse({ success: false, error: error.message }));
             });
             return true;
         }
@@ -271,31 +278,59 @@ async function getApiToken() {
     });
 }
 
+// Client-side wait must outlast the server's long-poll (110 s, Yopmail path up to ~100 s). If we abort
+// earlier the server can still find the mail and bill the quota while the code is thrown away here.
+const OTP_CLIENT_TIMEOUT_MS = 120000;
+
+// Registration lookups send BOTH filters so the server really filters (it ignores a lone `from` or
+// `subject`). Both are substring, case-insensitive matches on the real mail. Overridable from
+// chrome.storage.local (dakboxRegFrom / dakboxRegSubject) if the sender or wording ever changes.
+const REG_FROM_DEFAULT = 'pacc.sa';
+const REG_SUBJECT_DEFAULT = 'Verification';
+
+function isYopmailAddress(identifier) {
+    return /@yopmail\.com$/i.test(identifier || '');
+}
+
+async function buildOtpUrl(kind, identifier, expirySeconds, website) {
+    const params = new URLSearchParams();
+    params.set('email', identifier); // "user" (dakbox.net) or a full user@yopmail.com address
+
+    if (kind === 'verification') {
+        const s = await new Promise((resolve) => chrome.storage.local.get(['dakboxRegFrom', 'dakboxRegSubject'], resolve));
+        params.set('from', s.dakboxRegFrom || REG_FROM_DEFAULT);
+        params.set('subject', s.dakboxRegSubject || REG_SUBJECT_DEFAULT);
+    } else if (expirySeconds) {
+        params.set('expiry', expirySeconds);
+    }
+
+    // Yopmail inboxes are read by the server's browser scraper; target=svpotp selects its fast path
+    if (isYopmailAddress(identifier)) params.set('target', 'svpotp');
+    if (website) params.set('website', website);
+
+    return `https://dakbox.net/api/otp/${kind === 'verification' ? 'verification' : 'get'}?${params.toString()}`;
+}
+
 /**
- * Fetch OTP from DakBox API (for login verification)
- * Uses dakbox.net/api/otp/get with Bearer token
+ * Shared OTP fetch for both flows.
+ *   kind = 'get'          → login OTP        (GET /api/otp/get)
+ *   kind = 'verification' → registration OTP (GET /api/otp/verification)
+ * identifier is the dakbox.net username, or a full @yopmail.com address.
  */
-async function fetchOtpFromDakBox(username, maxRetries = 2, expirySeconds = null, website = '') {
+async function fetchOtpFromServer(kind, identifier, maxRetries = 2, expirySeconds = null, website = '') {
+    const label = kind === 'verification' ? 'Registration OTP' : 'OTP';
     const token = await getApiToken();
     if (!token) {
         return { success: false, error: 'API token not set. Please connect in extension settings.' };
     }
 
-    let apiUrl = `https://dakbox.net/api/otp/get?email=${encodeURIComponent(username)}`;
-    if (expirySeconds) {
-        apiUrl += `&expiry=${encodeURIComponent(expirySeconds)}`;
-    }
-    if (website) {
-        apiUrl += `&website=${encodeURIComponent(website)}`;
-    }
-
-    console.log(`[DakBox] Fetching OTP from: ${apiUrl}`);
+    const apiUrl = await buildOtpUrl(kind, identifier, expirySeconds, website);
+    console.log(`[DakBox] Fetching ${label} from: ${apiUrl}`);
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), OTP_CLIENT_TIMEOUT_MS);
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 70000);
-
             const response = await fetch(apiUrl, {
                 method: 'GET',
                 signal: controller.signal,
@@ -305,14 +340,13 @@ async function fetchOtpFromDakBox(username, maxRetries = 2, expirySeconds = null
                     'Cache-Control': 'no-cache'
                 }
             });
-
             clearTimeout(timeoutId);
 
             // Try to parse JSON body even on non-200 responses
             let data;
             try {
                 data = await response.json();
-                console.log(`[DakBox] API Response (HTTP ${response.status}):`, data);
+                console.log(`[DakBox] ${label} API response (HTTP ${response.status}):`, data);
             } catch (parseErr) {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -320,23 +354,24 @@ async function fetchOtpFromDakBox(username, maxRetries = 2, expirySeconds = null
                 throw new Error('Failed to parse API response');
             }
 
-            // Handle 401 Unauthorized
+            // The server reports failures as { error: "..." }; Laravel validation uses { message: "..." }
+            const serverMsg = data?.error || data?.message;
+
             if (response.status === 401) {
                 return { success: false, error: 'API token invalid or expired. Please reconnect.' };
             }
 
-            // Handle 403 Forbidden — subscription / quota errors
+            // 403 — disabled key / no subscription / quota used up: show the server's real reason
             if (response.status === 403) {
-                const msg = data?.message || 'Access denied (403). Please check your subscription.';
+                const msg = serverMsg || 'Access denied (403). Please check your subscription.';
                 console.warn('[DakBox] 403 Forbidden:', msg);
                 return { success: false, error: msg, isSubscriptionError: true };
             }
 
-            // Handle 410 Gone - OTP expired but might still have the code
+            // 410 — code exists but is past its validity window
             if (response.status === 410) {
-                console.warn('[DakBox] OTP expired (410 Gone)');
+                console.warn(`[DakBox] ${label} expired (410 Gone)`);
                 if (data && data.data && data.data.otp) {
-                    console.log('[DakBox] Expired OTP code still available:', data.data.otp);
                     return {
                         success: true,
                         otp: data.data.otp,
@@ -347,17 +382,16 @@ async function fetchOtpFromDakBox(username, maxRetries = 2, expirySeconds = null
                     };
                 }
                 if (attempt < maxRetries) {
-                    console.log(`[DakBox] No OTP in expired response, waiting 10s before retry...`);
                     await new Promise(resolve => setTimeout(resolve, 10000));
                     continue;
                 }
-                return { success: false, error: data?.message || 'OTP has expired' };
+                return { success: false, error: serverMsg || `${label} has expired` };
             }
 
-            // Handle 429 Too Many Requests - a previous request is still in-flight server-side
+            // 429 — a previous request for this inbox is still being polled server-side
             if (response.status === 429) {
                 const retryAfter = (data && data.retry_after) ? data.retry_after : 10;
-                console.log(`[DakBox] 429: Previous request in progress. Waiting ${retryAfter}s before retry (Attempt ${attempt}/${maxRetries})...`);
+                console.log(`[DakBox] 429: previous request in progress. Waiting ${retryAfter}s (attempt ${attempt}/${maxRetries})...`);
                 if (attempt < maxRetries) {
                     await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
                     continue;
@@ -365,36 +399,41 @@ async function fetchOtpFromDakBox(username, maxRetries = 2, expirySeconds = null
                 return { success: false, error: 'Rate limited (429): another request is already in progress', isSilent: true };
             }
 
+            // 404 — the server already waited its full window and no matching mail arrived
+            if (response.status === 404) {
+                console.log(`[DakBox] ${label}: nothing found yet (attempt ${attempt}/${maxRetries})`);
+                if (attempt < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, 10000));
+                    continue;
+                }
+                return { success: false, error: serverMsg || 'No OTP email received', isSilent: true };
+            }
+
             if (!response.ok) {
-                throw new Error(data?.message || `HTTP error! status: ${response.status}`);
+                throw new Error(serverMsg || `HTTP error! status: ${response.status}`);
             }
 
             if (!data.success || !data.data) {
-                throw new Error(data.message || 'Invalid API response');
+                throw new Error(serverMsg || 'Invalid API response');
             }
 
             const otpData = data.data;
 
-            // Check if OTP is expired
             if (otpData.expired === true) {
-                console.warn('[DakBox] OTP has expired');
+                console.warn(`[DakBox] ${label} has expired`);
                 if (attempt < maxRetries) {
-                    console.log(`[DakBox] Waiting 10s before retry ${attempt + 1}/${maxRetries}...`);
                     await new Promise(resolve => setTimeout(resolve, 10000));
                     continue;
                 }
                 return { success: false, error: 'OTP has expired and no new OTP available' };
             }
 
-            // Check remaining time
-            if (otpData.remaining_seconds !== undefined && otpData.remaining_seconds < 10) {
-                console.warn(`[DakBox] OTP has only ${otpData.remaining_seconds}s remaining`);
+            if (otpData.remaining_seconds !== undefined && otpData.remaining_seconds !== null && otpData.remaining_seconds < 10) {
+                console.warn(`[DakBox] ${label} has only ${otpData.remaining_seconds}s remaining`);
             }
 
-            // Extract OTP
             if (!otpData.otp) {
                 if (attempt < maxRetries) {
-                    console.log(`[DakBox] No OTP in response, waiting 10s before retry ${attempt + 1}/${maxRetries}...`);
                     await new Promise(resolve => setTimeout(resolve, 10000));
                     continue;
                 }
@@ -411,19 +450,23 @@ async function fetchOtpFromDakBox(username, maxRetries = 2, expirySeconds = null
             };
 
         } catch (error) {
-            // Treat 404 (Not Found) and 410 (Gone) as "silent" failures during polling
-            const isSilentError = error.message.includes('404') || error.message.includes('410') || error.message.includes('No OTP email found');
+            clearTimeout(timeoutId);
+            const timedOut = error.name === 'AbortError';
+            const message = timedOut
+                ? `No response from DakBox within ${OTP_CLIENT_TIMEOUT_MS / 1000}s`
+                : error.message;
+            const isSilentError = timedOut || /404|410|No OTP email/i.test(message);
 
             if (isSilentError) {
-                console.log(`[DakBox] Polling check: No OTP found yet (Attempt ${attempt}/${maxRetries})`);
+                console.log(`[DakBox] ${label}: no result yet (attempt ${attempt}/${maxRetries}): ${message}`);
             } else {
-                console.error(`[DakBox] Attempt ${attempt}/${maxRetries} failed:`, error);
+                console.error(`[DakBox] ${label} attempt ${attempt}/${maxRetries} failed:`, error);
             }
 
             if (attempt < maxRetries) {
                 await new Promise(resolve => setTimeout(resolve, 10000));
             } else {
-                return { success: false, error: error.message, isSilent: isSilentError };
+                return { success: false, error: message, isSilent: isSilentError };
             }
         }
     }
@@ -431,134 +474,14 @@ async function fetchOtpFromDakBox(username, maxRetries = 2, expirySeconds = null
     return { success: false, error: 'Max retries exceeded' };
 }
 
-/**
- * Fetch OTP from verification API (for registration verification)
- * Uses dakbox.net/api/otp/verification with Bearer token
- */
-async function fetchRegistrationOtp(username, maxRetries = 2, website = '') {
-    const token = await getApiToken();
-    if (!token) {
-        return { success: false, error: 'API token not set. Please connect in extension settings.' };
-    }
+/** Login OTP (GET /api/otp/get). identifier = dakbox.net username or full @yopmail.com address. */
+function fetchOtpFromDakBox(identifier, maxRetries = 2, expirySeconds = null, website = '') {
+    return fetchOtpFromServer('get', identifier, maxRetries, expirySeconds, website);
+}
 
-    let apiUrl = `https://dakbox.net/api/otp/verification?email=${encodeURIComponent(username)}`;
-    if (website) {
-        apiUrl += `&website=${encodeURIComponent(website)}`;
-    }
-    console.log(`[DakBox] Fetching registration OTP from: ${apiUrl}`);
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 70000);
-
-            const response = await fetch(apiUrl, {
-                method: 'GET',
-                signal: controller.signal,
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json',
-                    'Cache-Control': 'no-cache'
-                }
-            });
-
-            clearTimeout(timeoutId);
-
-            // Try to parse JSON body even on non-200 responses
-            let data;
-            try {
-                data = await response.json();
-                console.log(`[DakBox] Registration OTP API Response (HTTP ${response.status}):`, data);
-            } catch (parseErr) {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                throw new Error('Failed to parse API response');
-            }
-
-            // Handle 401 Unauthorized
-            if (response.status === 401) {
-                return { success: false, error: 'API token invalid or expired. Please reconnect.' };
-            }
-
-            // Handle 403 Forbidden — subscription / quota errors
-            if (response.status === 403) {
-                const msg = data?.message || 'Access denied (403). Please check your subscription.';
-                console.warn('[DakBox] 403 Forbidden (registration):', msg);
-                return { success: false, error: msg, isSubscriptionError: true };
-            }
-
-            // Handle 410 Gone - OTP expired but might still have the code
-            if (response.status === 410) {
-                console.warn('[DakBox] Registration OTP expired (410 Gone)');
-                if (data && data.data && data.data.otp) {
-                    return {
-                        success: true,
-                        otp: data.data.otp,
-                        subject: data.data.subject,
-                        from: data.data.from,
-                        remaining_seconds: 0,
-                        expired: true
-                    };
-                }
-                if (attempt < maxRetries) {
-                    await new Promise(resolve => setTimeout(resolve, 10000));
-                    continue;
-                }
-                return { success: false, error: data?.message || 'Registration OTP has expired' };
-            }
-
-            if (!response.ok) {
-                throw new Error(data?.message || `HTTP error! status: ${response.status}`);
-            }
-
-            if (!data.success || !data.data) {
-                throw new Error(data.message || 'Invalid API response');
-            }
-
-            const otpData = data.data;
-
-            if (otpData.expired === true) {
-                console.warn('[DakBox] Registration OTP has expired');
-                if (attempt < maxRetries) {
-                    await new Promise(resolve => setTimeout(resolve, 10000));
-                    continue;
-                }
-                return { success: false, error: 'OTP has expired and no new OTP available' };
-            }
-
-            if (otpData.remaining_seconds !== undefined && otpData.remaining_seconds < 10) {
-                console.warn(`[DakBox] Registration OTP has only ${otpData.remaining_seconds}s remaining`);
-            }
-
-            if (!otpData.otp) {
-                if (attempt < maxRetries) {
-                    await new Promise(resolve => setTimeout(resolve, 10000));
-                    continue;
-                }
-                return { success: false, error: 'No OTP found in response' };
-            }
-
-            return {
-                success: true,
-                otp: otpData.otp,
-                subject: otpData.subject,
-                from: otpData.from,
-                remaining_seconds: otpData.remaining_seconds,
-                expired: otpData.expired
-            };
-
-        } catch (error) {
-            console.error(`[DakBox] Registration OTP attempt ${attempt}/${maxRetries} failed:`, error);
-            if (attempt < maxRetries) {
-                await new Promise(resolve => setTimeout(resolve, 10000));
-            } else {
-                return { success: false, error: error.message };
-            }
-        }
-    }
-
-    return { success: false, error: 'Max retries exceeded' };
+/** Registration OTP (GET /api/otp/verification) with explicit sender + subject filters. */
+function fetchRegistrationOtp(identifier, maxRetries = 2, website = '') {
+    return fetchOtpFromServer('verification', identifier, maxRetries, null, website);
 }
 
 // Set default settings on install

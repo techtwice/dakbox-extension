@@ -1,7 +1,7 @@
 /**
  * DakBox SVP OTP Content Script
- * Runs on svp-international.pacc.sa to auto-detect dakbox.net emails,
- * open DakBox inbox, and auto-fill OTP verification codes
+ * Runs on svp-international.qiwa.sa (formerly svp-international.pacc.sa) to auto-detect dakbox.net and
+ * yopmail.com emails, open the inbox, and auto-fill OTP verification codes
  *
  * EXACT COPY of dakbox.net related functions from manpowerAI3.0/modules/domains/svp-international.js
  * Functions copied: checkForOtpVerificationPage, checkForRegistrationOtpPage,
@@ -101,6 +101,19 @@
             log(`[DakBox-SVP] Auto Open Yopmail setting changed to: ${autoOpenYopmail}`);
         }
     });
+
+    // ─────────────────────────────────────────────
+    // Helper: mailboxIdentifier
+    // dakbox.net  → just the username (the server appends @dakbox.net)
+    // yopmail.com → the FULL address (the server routes @yopmail.com to its browser scraper)
+    // ─────────────────────────────────────────────
+
+    function mailboxIdentifier(email) {
+        const dakbox = email.match(/^([^@]+)@dakbox\.net$/i);
+        if (dakbox) return dakbox[1];
+        if (/^[^@]+@yopmail\.com$/i.test(email)) return email.toLowerCase();
+        return null;
+    }
 
     // ─────────────────────────────────────────────
     // Helper: isElementVisible (from original)
@@ -226,6 +239,14 @@
                 if (autoOpenYopmail && !window.__svp_yopmail_opened) {
                     openYopmailTab(yopmailEmail);
                 }
+
+                // Also auto-fill OTP (the server reads the Yopmail inbox for us)
+                if (autoOtpEnabled) {
+                    handleOtpAutoFill(yopmailEmail);
+                } else if (otpCheckAttempts >= MAX_OTP_CHECKS) {
+                    log("[SVP-OTP] Auto OTP is disabled and max view attempts reached. Stopping checks.");
+                    window.__svp_otp_filled = true;
+                }
             }
         }
     }
@@ -348,6 +369,14 @@
             if (autoOpenYopmail && !window.__svp_yopmail_opened) {
                 openYopmailTab(yopmailEmail);
             }
+
+            // Also auto-fill OTP (the server reads the Yopmail inbox for us)
+            if (autoOtpEnabled) {
+                handleRegistrationOtpAutoFill(yopmailEmail);
+            } else if (regOtpCheckAttempts >= MAX_OTP_CHECKS) {
+                log("[SVP-RegOTP] Auto OTP is disabled and max view attempts reached. Stopping checks.");
+                window.__svp_reg_otp_filled = true;
+            }
         } else {
             log("[SVP-RegOTP] No email found on registration verification page");
         }
@@ -441,14 +470,13 @@
         window.__svp_otp_handling_in_progress = true;
 
         try {
-            const emailMatch = email.match(/^([^@]+)@dakbox\.net$/i);
-            if (!emailMatch) throw new Error(`Invalid dakbox.net email format: ${email}`);
-            const username = emailMatch[1];
+            const identifier = mailboxIdentifier(email);
+            if (!identifier) throw new Error(`Unsupported email (need dakbox.net or yopmail.com): ${email}`);
 
-            log(`[SVP-OTP] Fetching OTP using background polling (max 2 attempts) for ${username}...`);
+            log(`[SVP-OTP] Fetching OTP using background polling (max 2 attempts) for ${identifier}...`);
 
             // Fetch OTP from DakBox API (maxRetries 2 inside background.js)
-            const otpResult = await fetchOtpFromDakBox(username, 2);
+            const otpResult = await fetchOtpFromDakBox(identifier, 2);
 
             if (otpResult.success && otpResult.otp) {
                 log(`[SVP-OTP] OTP fetched successfully: ${otpResult.otp}`);
@@ -494,14 +522,13 @@
         window.__svp_reg_otp_handling_in_progress = true;
 
         try {
-            const emailMatch = email.match(/^([^@]+)@dakbox\.net$/i);
-            if (!emailMatch) throw new Error(`Invalid dakbox.net email format: ${email}`);
-            const username = emailMatch[1];
+            const identifier = mailboxIdentifier(email);
+            if (!identifier) throw new Error(`Unsupported email (need dakbox.net or yopmail.com): ${email}`);
 
-            log(`[SVP-RegOTP] Fetching Registration OTP using background polling (max 2 attempts) for ${username}...`);
+            log(`[SVP-RegOTP] Fetching Registration OTP using background polling (max 2 attempts) for ${identifier}...`);
 
             // Fetch OTP directly, passing maxRetries 2 to the background worker
-            const otpResult = await fetchRegistrationOtp(username, 2);
+            const otpResult = await fetchRegistrationOtp(identifier, 2);
 
             if (otpResult.success && otpResult.otp) {
                 log(`[SVP-RegOTP] OTP fetched successfully: ${otpResult.otp}`);
@@ -532,14 +559,14 @@
     // ─────────────────────────────────────────────
     // fetchOtpFromDakBox (via background service worker)
     // Original calls API directly, here we route through background.js
-    // because content scripts on svp-international.pacc.sa can't
-    // directly CORS-fetch from t2hub.app
+    // because content scripts on svp-international.qiwa.sa can't
+    // directly CORS-fetch from dakbox.net
     // ─────────────────────────────────────────────
 
-    async function fetchOtpFromDakBox(username, maxRetries = 5) {
+    async function fetchOtpFromDakBox(identifier, maxRetries = 5) {
         return new Promise((resolve) => {
             chrome.runtime.sendMessage(
-                { action: 'fetchOtp', username, maxRetries },
+                { action: 'fetchOtp', username: identifier, maxRetries },
                 (response) => {
                     if (chrome.runtime.lastError) {
                         resolve({ success: false, error: chrome.runtime.lastError.message });
@@ -555,10 +582,10 @@
     // fetchRegistrationOtp (via background service worker)
     // ─────────────────────────────────────────────
 
-    async function fetchRegistrationOtp(username, maxRetries = 5) {
+    async function fetchRegistrationOtp(identifier, maxRetries = 5) {
         return new Promise((resolve) => {
             chrome.runtime.sendMessage(
-                { action: 'fetchRegistrationOtp', username, maxRetries },
+                { action: 'fetchRegistrationOtp', username: identifier, maxRetries },
                 (response) => {
                     if (chrome.runtime.lastError) {
                         resolve({ success: false, error: chrome.runtime.lastError.message });

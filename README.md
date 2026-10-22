@@ -48,14 +48,14 @@ Enhance your DakBox.net temporary email experience with automatic OTP (One-Time 
 
 | Toggle | Default | Description |
 |---|---|---|
-| Auto OTP Fill on SVP | ON | Auto-fill OTP codes on svp-international.pacc.sa |
+| Auto OTP Fill on SVP | ON | Auto-fill OTP codes on svp-international.qiwa.sa (old svp-international.pacc.sa still matched) |
 | Auto Open DakBox Inbox | OFF | Auto-open your DakBox inbox tab when needed |
 | Auto Open Yopmail | ON | Auto-open Yopmail inbox tab when a Yopmail address is detected |
 | Auto Random Email Generate | ON | Show the email generator button on all website email fields |
 
 ## 🧩 Supported Platforms
 
-- **`svp-international.pacc.sa`** — Full auto-fill (login OTP + registration OTP) with Yopmail/DakBox inbox auto-open.
+- **`svp-international.qiwa.sa`** (formerly `svp-international.pacc.sa`) — Full auto-fill (login OTP + registration OTP) for DakBox and Yopmail inboxes, with optional inbox auto-open.
 - **Any Custom Website** — Configure via Options → OTP Site Configs using the visual element picker.
 
 ## 📡 API Integration

@@ -229,19 +229,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Check HTTP status first
+            // Check HTTP status first. Only a 401/403 means the token itself is bad; a 429/5xx is a
+            // temporary server problem, so keep the saved token instead of silently logging the user out.
             if (!response.ok) {
-                const errMsg = response.status === 401 ? 'Invalid or expired token' : 
-                               response.status === 403 ? 'Access denied' :
-                               `Error: ${response.status}`;
+                const tokenRejected = response.status === 401 || response.status === 403;
                 console.warn('[DakBox] API response not ok:', response.status, data);
+                if (!tokenRejected) {
+                    if (!silent) setApiStatus(`Server error (${response.status}) — please try again`, 'error');
+                    return;
+                }
+                const errMsg = response.status === 401 ? 'Invalid or expired token' : (data.error || 'Access denied');
                 chrome.storage.local.remove(['dakboxApiToken', 'dakboxUserInfo']);
                 showApiSetupView();
                 setApiStatus(errMsg, 'error');
                 return;
             }
 
-            // Handle API error response
+            // Handle API error response (a 200 that still carries an error)
             if (data.error) {
                 console.warn('[DakBox] API error:', data.error);
                 chrome.storage.local.remove(['dakboxApiToken', 'dakboxUserInfo']);
