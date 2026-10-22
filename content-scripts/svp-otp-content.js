@@ -103,6 +103,89 @@
     });
 
     // ─────────────────────────────────────────────
+    // OtpIndicator: small on-page status toast (spinner → success / error) so the user can see
+    // that the automatic OTP lookup is running. Styles come from svp-indicator.css (manifest "css").
+    // ─────────────────────────────────────────────
+
+    const OtpIndicator = (() => {
+        let root = null, titleEl = null, detailEl = null, iconEl = null;
+        let tickTimer = null, hideTimer = null, startedAt = 0, baseDetail = '';
+
+        function ensure() {
+            if (root && root.isConnected) return;
+            root = document.createElement('div');
+            root.id = 'dakbox-otp-indicator';
+            root.setAttribute('role', 'status');
+            root.setAttribute('aria-live', 'polite');
+
+            iconEl = document.createElement('span');
+            iconEl.className = 'dakbox-otp-icon';
+
+            const body = document.createElement('div');
+            body.className = 'dakbox-otp-body';
+            titleEl = document.createElement('div');
+            titleEl.className = 'dakbox-otp-title';
+            detailEl = document.createElement('div');
+            detailEl.className = 'dakbox-otp-detail';
+            body.append(titleEl, detailEl);
+
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'dakbox-otp-close';
+            close.setAttribute('aria-label', 'Close');
+            close.textContent = '\u00d7';
+            close.addEventListener('click', hide);
+
+            root.append(iconEl, body, close);
+            (document.body || document.documentElement).appendChild(root);
+        }
+
+        function clearTimers() {
+            if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+            if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+        }
+
+        function render(state, title, detail, glyph) {
+            ensure();
+            root.className = state ? 'dakbox-otp-' + state : '';
+            iconEl.textContent = glyph || '';
+            titleEl.textContent = title;
+            detailEl.textContent = detail || '';
+        }
+
+        function hide() {
+            clearTimers();
+            if (root) { root.remove(); root = null; }
+        }
+
+        return {
+            /** Spinner with a live "Ns" counter while the server waits for the email. */
+            loading(title, detail) {
+                clearTimers();
+                startedAt = Date.now();
+                baseDetail = detail || '';
+                render('', title, baseDetail, '');
+                tickTimer = setInterval(() => {
+                    if (!root) return clearTimers();
+                    const secs = Math.round((Date.now() - startedAt) / 1000);
+                    detailEl.textContent = baseDetail + (baseDetail ? ' \u00b7 ' : '') + secs + 's';
+                }, 1000);
+            },
+            success(title, detail, hideAfterMs = 5000) {
+                clearTimers();
+                render('success', title, detail, '\u2713');
+                hideTimer = setTimeout(hide, hideAfterMs);
+            },
+            error(title, detail, hideAfterMs = 12000) {
+                clearTimers();
+                render('error', title, detail, '!');
+                hideTimer = setTimeout(hide, hideAfterMs);
+            },
+            hide
+        };
+    })();
+
+    // ─────────────────────────────────────────────
     // Helper: mailboxIdentifier
     // dakbox.net  → just the username (the server appends @dakbox.net)
     // yopmail.com → the FULL address (the server routes @yopmail.com to its browser scraper)
@@ -474,36 +557,46 @@
             if (!identifier) throw new Error(`Unsupported email (need dakbox.net or yopmail.com): ${email}`);
 
             log(`[SVP-OTP] Fetching OTP using background polling (max 2 attempts) for ${identifier}...`);
+            OtpIndicator.loading('DakBox: fetching your OTP', identifier.includes('@')
+                ? `Waiting for the email to ${email} (Yopmail can take up to a minute)`
+                : `Waiting for the email to ${email}`);
 
             // Fetch OTP from DakBox API (maxRetries 2 inside background.js)
             const otpResult = await fetchOtpFromDakBox(identifier, 2);
 
             if (otpResult.success && otpResult.otp) {
                 log(`[SVP-OTP] OTP fetched successfully: ${otpResult.otp}`);
+                OtpIndicator.loading('DakBox: filling the code', `Code ${otpResult.otp} received`);
                 const fillSuccess = await fillVerificationCode(otpResult.otp);
                 if (fillSuccess) {
                     await new Promise(resolve => setTimeout(resolve, 500));
-                    await clickSignInButton();
+                    const clicked = await clickSignInButton();
                     window.__svp_otp_filled = true;
+                    OtpIndicator.success('DakBox: OTP filled', clicked ? `Code ${otpResult.otp} entered - signing you in` : `Code ${otpResult.otp} entered - press Sign in`);
                     log("[SVP-OTP] Auto OTP process completed successfully");
                 } else {
                     warn("[SVP-OTP] Failed to fill OTP. Stopping for this page load.");
+                    OtpIndicator.error('DakBox: could not fill the code', `Enter it manually: ${otpResult.otp}`);
                     window.__svp_otp_filled = true;
                 }
             } else if (otpResult.isSubscriptionError) {
                 warn(`[SVP-OTP] Subscription error: ${otpResult.error}`);
+                OtpIndicator.hide();
                 alert(`⚠️ DakBox — Subscription Error\n\n${otpResult.error}`);
                 window.__svp_otp_filled = true;
             } else if (otpResult.expired) {
                 log("[SVP-OTP] OTP is already expired on server.");
+                OtpIndicator.error('DakBox: OTP expired', 'The newest code has expired - request a new one.');
                 window.__svp_otp_filled = true;
             } else {
                 warn("[SVP-OTP] Background polling reached max attempts or failed to find OTP. Stopping for this page load.");
+                OtpIndicator.error('DakBox: no OTP received', otpResult.error || 'No email arrived in time. Check the inbox.');
                 window.__svp_otp_filled = true;
             }
 
         } catch (err) {
             error("[SVP-OTP] Auto OTP fill failed:", err);
+            OtpIndicator.error('DakBox: auto OTP failed', err.message);
             window.__svp_otp_filled = true; // Stop observer
         } finally {
             window.__svp_otp_handling_in_progress = false;
@@ -526,30 +619,39 @@
             if (!identifier) throw new Error(`Unsupported email (need dakbox.net or yopmail.com): ${email}`);
 
             log(`[SVP-RegOTP] Fetching Registration OTP using background polling (max 2 attempts) for ${identifier}...`);
+            OtpIndicator.loading('DakBox: fetching your verification code', identifier.includes('@')
+                ? `Waiting for the email to ${email} (Yopmail can take up to a minute)`
+                : `Waiting for the email to ${email}`);
 
             // Fetch OTP directly, passing maxRetries 2 to the background worker
             const otpResult = await fetchRegistrationOtp(identifier, 2);
 
             if (otpResult.success && otpResult.otp) {
                 log(`[SVP-RegOTP] OTP fetched successfully: ${otpResult.otp}`);
+                OtpIndicator.loading('DakBox: filling the code', `Code ${otpResult.otp} received`);
                 const fillSuccess = await fillVerificationCode(otpResult.otp);
                 if (fillSuccess) {
                     window.__svp_reg_otp_filled = true;
+                    OtpIndicator.success('DakBox: code filled', `Code ${otpResult.otp} entered - press Continue`);
                     log("[SVP-RegOTP] Auto OTP process completed successfully (Continue NOT clicked)");
                 } else {
+                    OtpIndicator.error('DakBox: could not fill the code', `Enter it manually: ${otpResult.otp}`);
                     window.__svp_reg_otp_filled = true;
                 }
             } else if (otpResult.isSubscriptionError) {
                 warn(`[SVP-RegOTP] Subscription error: ${otpResult.error}`);
+                OtpIndicator.hide();
                 alert(`⚠️ DakBox — Subscription Error\n\n${otpResult.error}`);
                 window.__svp_reg_otp_filled = true;
             } else {
                 warn("[SVP-RegOTP] Background polling reached max attempts or failed to find OTP. Stopping for this page load.");
+                OtpIndicator.error('DakBox: no code received', otpResult.error || 'No email arrived in time. Check the inbox.');
                 window.__svp_reg_otp_filled = true; // Stop observer
             }
 
         } catch (err) {
             error("[SVP-RegOTP] Auto OTP fill failed:", err);
+            OtpIndicator.error('DakBox: auto OTP failed', err.message);
             window.__svp_reg_otp_filled = true;
         } finally {
             window.__svp_reg_otp_handling_in_progress = false;
@@ -772,12 +874,23 @@
                 return false;
             }
 
-            // Click the button
+            // Click the button ONCE. Submitting the login twice (this used to be .click() followed by a
+            // synthetic 'click' event) fires two login requests; the second one invalidates the first
+            // session, the dashboard's permissions call then gets a 401 and the site logs the user out.
             signInButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
             await new Promise(resolve => setTimeout(resolve, 300));
 
+            const buttonBusy = signInButton.disabled
+                || signInButton.classList.contains('is-loading')
+                || signInButton.classList.contains('is-disabled')
+                || signInButton.getAttribute('aria-busy') === 'true';
+            if (window.__svp_signin_clicked || buttonBusy || window.location.href.indexOf('/auth/login') === -1) {
+                log("[SVP-OTP] Login already submitted (or page moved on) - not clicking Sign in again");
+                return true;
+            }
+
+            window.__svp_signin_clicked = true;
             signInButton.click();
-            signInButton.dispatchEvent(new Event('click', { bubbles: true }));
 
             log("[SVP-OTP] Sign in button clicked successfully");
             return true;
@@ -943,6 +1056,8 @@
             // Reset dakbox/yopmail opened flags on navigation
             window.__svp_dakbox_opened = false;
             window.__svp_yopmail_opened = false;
+            window.__svp_signin_clicked = false;
+            OtpIndicator.hide();
 
             // Re-initialize observers for the new page
             setupOtpVerificationObserver();
