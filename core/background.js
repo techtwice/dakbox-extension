@@ -48,6 +48,11 @@ async function getWebsiteHostname(sender) {
 // same email simultaneously, share one real fetch instead of firing two.
 const inFlightOtpRequests = new Map();
 
+// "abc", "abc@dakbox.net" and "ABC@DakBox.net" are the same inbox - share one lookup for all of them.
+function mailboxKey(identifier) {
+    return String(identifier || '').trim().toLowerCase().replace(/@dakbox\.net$/, '');
+}
+
 // Listen for messages from popup and content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     try {
@@ -58,7 +63,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Handle OTP fetch request (login OTP)
         if (request.action === 'fetchOtp') {
-            const key = request.username;
+            const key = mailboxKey(request.username);
             getWebsiteHostname(sender).then(website => {
                 // If an identical fetch is already in-flight, wait for it instead of starting a new one
                 if (inFlightOtpRequests.has(key)) {
@@ -188,7 +193,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         // Handle registration OTP fetch request
         if (request.action === 'fetchRegistrationOtp') {
-            const key = 'reg:' + request.username;
+            const key = 'reg:' + mailboxKey(request.username);
             getWebsiteHostname(sender).then(website => {
                 if (inFlightOtpRequests.has(key)) {
                     console.log(`[DakBox] Deduplicating registration fetch for ${request.username} — sharing in-flight request.`);
@@ -327,6 +332,10 @@ async function fetchOtpFromServer(kind, identifier, maxRetries = 2, expirySecond
     const apiUrl = await buildOtpUrl(kind, identifier, expirySeconds, website);
     console.log(`[DakBox] Fetching ${label} from: ${apiUrl}`);
 
+    // Another lookup for the same inbox (e.g. an earlier page load still being polled by the server) holds
+    // the server-side lock for up to ~110 s. Waiting for it must not use up our retries.
+    const lockWaitDeadline = Date.now() + OTP_CLIENT_TIMEOUT_MS + 5000;
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), OTP_CLIENT_TIMEOUT_MS);
@@ -391,12 +400,13 @@ async function fetchOtpFromServer(kind, identifier, maxRetries = 2, expirySecond
             // 429 — a previous request for this inbox is still being polled server-side
             if (response.status === 429) {
                 const retryAfter = (data && data.retry_after) ? data.retry_after : 10;
-                console.log(`[DakBox] 429: previous request in progress. Waiting ${retryAfter}s (attempt ${attempt}/${maxRetries})...`);
-                if (attempt < maxRetries) {
+                console.log(`[DakBox] 429: another lookup for this inbox is in progress. Waiting ${retryAfter}s...`);
+                if (Date.now() + retryAfter * 1000 < lockWaitDeadline) {
                     await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+                    attempt--;   // waiting for the other lookup does not consume one of our retries
                     continue;
                 }
-                return { success: false, error: 'Rate limited (429): another request is already in progress', isSilent: true };
+                return { success: false, error: 'Another lookup for this inbox is still running. Try again in a minute.', isSilent: true };
             }
 
             // 404 — the server already waited its full window and no matching mail arrived

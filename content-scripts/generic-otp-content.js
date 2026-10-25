@@ -10,6 +10,16 @@
     window.__dakbox_generic_otp_loaded = true;
 
     const hostname = window.location.hostname;
+
+    // These sites have a dedicated script (svp-otp-content.js). If this generic script also ran there
+    // (it does whenever the user saved a site config for the domain), two scripts would fetch the same
+    // inbox at once - the server answers the second with HTTP 429 - and both would fill / click Sign in.
+    const DEDICATED_SCRIPT_HOSTS = ['svp-international.qiwa.sa', 'svp-international.pacc.sa'];
+    if (DEDICATED_SCRIPT_HOSTS.includes(hostname)) {
+        console.log(`[DakBox] generic-otp-content.js: "${hostname}" is handled by its dedicated script - skipping.`);
+        return;
+    }
+
     // Strip leading "www." so configs saved as "notion.so" match "www.notion.so"
     const configHostname = hostname.replace(/^www\./, '');
 
